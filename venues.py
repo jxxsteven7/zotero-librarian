@@ -1,4 +1,4 @@
-"""刊/会名称 → 用户风格缩写。retitle.py 与 download.py 共用；新增缩写只改这里。"""
+"""刊/会名称 → 用户风格缩写。download.py 用；新增缩写只改这里。"""
 import re
 
 VENUE_ABBR = {  # 期刊/会议全名(小写) -> 缩写
@@ -45,3 +45,22 @@ def venue_from_context(text):
     for rx, ab in VENUE_RE:
         if re.search(rx, low): return ab
     return None
+
+
+# PDF 首页上的出版声明（页眉/页脚/脚注）。只看首页：末页常是参考文献，"In Robotics: Science and Systems, 2023." 这种换行会误判
+PDF_VENUE_LINE = re.compile(r"published as a conference paper at|proceedings of|conference on robot learning|robotics: science and systems|"
+                            r"international conference on (?:robotics and automation|machine learning|learning representations|intelligent robots)|"
+                            r"neural information processing systems|computer vision and pattern recognition|"
+                            r"\b(?:corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai)\b[ ,'’(]*20\d\d", re.I)
+NOT_A_STATEMENT = re.compile(r"^\s*\[\d+\]|et al\.|arXiv preprint|arXiv:\d|pp\.\s*\d|\bvol\.|compared|baseline|following|similar to|we use|we adopt|we follow", re.I)
+
+
+def venue_from_pdf(text):
+    """从 PDF 首页文本找出版声明 → (缩写, 证据行)；找不到 (None, None)。"""
+    first = (text or "").split("\f")[0]
+    for line in first.split("\n"):
+        s = line.strip()
+        if not s or len(s) > 200 or NOT_A_STATEMENT.search(s) or not PDF_VENUE_LINE.search(s): continue
+        v = venue_from_context(s)
+        if v: return v, s[:120]
+    return None, None

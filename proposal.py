@@ -102,12 +102,15 @@ def _add(key, fam, val):
     P[key] = (c, fams["method"], fams["embod"], fams["tech"], fams["base"], fams["modality"], s, n)
 for k in ("6HWH2J5Y", "TC8RWRFC", "N7NPRGW8", "U3HFYV4Q", "HHNYRU6X", "G2KU4YKI", "TVGP9VKA", "AP8LAAEQ"):
     _add(k, "method", "teleop")
-P["G2KU4YKI"] = (P["G2KU4YKI"][0], ["teleop"], *P["G2KU4YKI"][2:])   # SPIDER: 去掉存疑的 rl
+P["G2KU4YKI"] = ([DM, HUM], ["teleop"], *P["G2KU4YKI"][2:])   # SPIDER: 去掉存疑的 rl；2026-09-12 用户定：灵巧手重定向 + 人形全身重定向各半，两个分类都放
 for k in ("4LMBA5EH", "76P65UU8", "YDHBZJLQ"):
     _add(k, "method", "grasp-synthesis")
 for k in ("H4WFCLBL", "G2KU4YKI", "BZVNNFPP"):
     _add(k, "embod", "humanoid")
 _add("MWAF9GHZ", "base", "pi0.6")
+# 2026-09-12 用户批准（翻正文核过）：SPIDER 3 个双手数据集/8 个双手任务；Eureka 的 Dexterity 套件是 20 个双 Shadow Hand 仿真任务
+_add("G2KU4YKI", "embod", "bimanual")
+_add("7EUPJN44", "embod", "bimanual")
 # type: 轴（与 method 正交）
 EXTRA_TAGS = {"DY3EK5IJ": ["type:survey"], "ESK4SDNZ": ["type:survey"],
               "6VBEISKD": ["type:benchmark"], "DEBKIIKT": ["type:benchmark"],

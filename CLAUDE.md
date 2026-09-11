@@ -75,8 +75,16 @@
   PDF 正文里抓到的日期要和出版年对得上，否则是引用噪音。拿不到精确日期就能到哪写哪（`[1999-07]`、`[1987]`），**不编造日子**。
 - 刊/会用缩写：CoRL RSS ICRA IROS ICLR ICML NeurIPS CVPR AISTATS · ESWA EAAI KBS ASOC SWEVO INS AES CAIE NCA JOGO
   CMAME ATE SOCO TEVC AMM CACM Access SR IJRR CEC · Book · TechReport；纯 arXiv 预印本写 `[arXiv]`，中稿后改。
-  来源优先级：用户已写 > Zotero 字段 > 笔记/arXiv comment 里的 "Accepted to …" > PDF 页眉出版声明 > 常识（标 ⚠ 请用户过目）。
+  来源优先级：用户已写 > Zotero 字段 > 笔记/arXiv comment 里的 "Accepted to …" > PDF 首页出版声明 > Semantic Scholar（只认
+  type=conference 或非 arXiv DOI）> Crossref 标题搜索（RSS/IEEE 有 DOI）> WebSearch 项目页/README 的 "Accepted to …" > 常识（标 ⚠ 请用户过目）。
+  **用户习惯下 arXiv 最新版，但已中稿的要写会议不写 `[arXiv]`**；`download.py` 收新论文时自动查前几层，
+  `download.py recheck` 定期给存量 `[arXiv]` 补查（DBLP 和 OpenReview 都有人机验证，脚本用不了）。
 - 用户自己写的部分（短名 `GWO 2014`、昵称 `[VAE]` `[ALOHA/ACT]`、标记 ✅❗、`[ICRA-Best]`）**原样保留在两个括号之后，绝不改**。
+- **标题前缀只是显示用，PDF 文件名不要带**。Zotero 7+ 默认 `autoRenameFiles.onMetadataChange=true`：父条目标题一改，
+  凡是文件名还是模板生成的附件就会跟着改名（2026-09-12 发现约 50 个 PDF 已经被改成 `作者 - 年 - [日期] [刊] 原名.pdf`）。
+  解决：文件名模板（设置 → 通用 → 文件重命名 → 自定义）改成去掉前两个方括号：
+  `{{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title replaceFrom="^\[[^\]]*\] *(\[[^\]]*\] *)?" replaceTo="" truncate="120" }}`
+  之后改标题文件名不再变；已经带前缀的用 Run JavaScript 一次性改回（只动文件名里有 ` - [` 的，不碰用户手工命名的 `NOA 2023.pdf` 之类）。
 - 缩写表在 `venues.py`，新缩写只加那里。存量 110 条已于 2026-09-11 批量改完（老→新对照在日志里），当时的 retitle 脚本和中间数据已删。
 
 ## 5. 工作流（approval mode）

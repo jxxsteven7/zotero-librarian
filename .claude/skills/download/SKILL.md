@@ -31,10 +31,15 @@ description: |
    - `status:` 不用写，脚本默认补 `status:to-read`（用户说"先看"就 `status:to-read-first`）。
    - 词表外的新值不要私造：留空，汇报里写"建议新标签 xxx，理由"。
 
-3. **核对标题前缀**：日期取 arXiv v1 提交日或期刊在线发表日，`YYYY-MMDD`；刊/会用缩写，纯预印本 `[arXiv]`。
-   卡片里带 `⚠` 的来源（Crossref 不完整、OpenReview 日期、全名刊物）要自己判断：
-   arXiv comment 写了 "Accepted to CoRL 2025" 之类就 `--venue CoRL`；全名刊物查 `venues.py` 没有缩写的，
-   按用户习惯造一个缩写（首字母大写）并在汇报里标出来。日期拿不到精确的能到哪写哪，不编造。
+3. **核对标题前缀**：日期取 arXiv v1 提交日或期刊在线发表日，`YYYY-MMDD`；刊/会用缩写。
+   **用户下的是 arXiv 版但多半已中稿，标题要写会议/期刊，不写 `[arXiv]`。** 脚本对 arXiv 条目自动查四层：
+   arXiv comment/journal_ref → PDF 首页出版声明 → Semantic Scholar → Crossref（RSS/IEEE 有 DOI，查得到），
+   查到就直接填进"刊/会 ←"并注明证据。**卡片仍是 `arXiv ← default` 时，再做一次 WebSearch**：
+   `"<论文原名>" accepted`（看项目页 / GitHub README / 作者主页有没有 "Accepted to CoRL 2026" 之类），
+   找到就 `--venue CoRL`，汇报备注里写证据链接；项目页写 "Anonymous Submission"/"under review" 或什么都没有就保留 `[arXiv]`，
+   备注 "未查到录用信息"。不要凭印象填会议。
+   卡片里带 `⚠` 的来源（Crossref 不完整、OpenReview 日期、缩写表里没有的全名）要自己判断：
+   全名刊物查 `venues.py` 没有缩写的，按用户习惯造一个缩写（首字母大写）并在汇报里标出来。日期拿不到精确的能到哪写哪，不编造。
 
 4. **入库**：`python3 download.py save <slug> --collection "<分类>" --tags a,b,c [--also "<分类>"] [--venue X] [--date YYYY-MMDD]`
    脚本经 Zotero 桌面端 connector 接口建条目、贴标签、送 PDF，然后从本地库读回 key/分类/标签/PDF 路径打印出来。
@@ -43,6 +48,11 @@ description: |
 
 5. **汇报**：一张表 `| key | 标题 | 分类 | 标签 | PDF | 备注 |`，备注写拿不准的判断（embod 留空的原因、⚠ 的日期/刊名、
    建议新标签、重复跳过）。日志脚本已自动追加到 `zotero-organize.log.md`，不用再写。
+
+## 存量复核
+
+用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1）
+只列表不写；把表给用户，批准后 `python3 download.py recheck --write [--only K1,K2]`。对仍是 `[arXiv]` 的可再逐篇 WebSearch。
 
 ## 不要做的事
 

@@ -8,6 +8,9 @@
                                             经 Zotero 桌面端 connector 接口入库：建条目 → 进分类+贴标签 → 送 PDF
   python3 download.py collect <itemKey> <collection>   事后经 Web API 追加第二个分类（save --also 同步没等到时用）
   python3 download.py list                  列出 inbox 里还没入库的
+  python3 download.py recheck [--dates] [--write] [--only K1,K2]
+                                            复核库里的 arXiv 条目：[arXiv] 标题查中稿（arXiv comment / PDF 首页声明 / Semantic Scholar /
+                                            Crossref）；--dates 再核对标题日期是否 v1 提交日。默认只列表，--write 才经 Web API 改标题
 
 链接支持：arXiv（abs/pdf/html/裸 id/alphaxiv/hf papers）、DOI（doi.org 或裸 DOI）、OpenReview、直接 PDF 链接、本地 PDF 路径、带 citation_* meta 的网页。
 付费期刊的 PDF 抓不到时条目照建（没附件），用户可事后把 PDF 拖进 Zotero，或把下好的 PDF 路径给 fetch。
@@ -19,7 +22,7 @@ from datetime import date
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from venues import abbr_from_name, venue_from_context
+from venues import abbr_from_name, venue_from_context, venue_from_pdf
 import apply as zapi                      # Web API 封装（req），只在 collect / --also 时用
 
 INBOX = os.path.join(HERE, "inbox"); DONE = os.path.join(INBOX, "done")
@@ -289,6 +292,60 @@ def fmt_date(d):
     return d[:4] or "????"
 
 
+def s2_venues(arxiv_ids):
+    """Semantic Scholar 批量查发表刊/会：{arXiv id: (缩写或None, 证据)}。只认 type=conference 或非 arXiv DOI 的记录
+    （S2 会把 cs.RO 预印本挂到一个叫 "Robotics" 的假期刊上，DOI 仍是 arXiv 的，那种不算）。无 key 时常 429，退避重试。"""
+    out = {}
+    ids = [a for a in dict.fromkeys(arxiv_ids) if a]
+    for i in range(0, len(ids), 200):
+        chunk = ids[i:i + 200]; body = json.dumps({"ids": ["arXiv:" + a for a in chunk]}).encode()
+        for attempt in range(6):
+            try:
+                st, h, raw = http("https://api.semanticscholar.org/graph/v1/paper/batch?fields=title,venue,publicationVenue,externalIds,year",
+                                  data=body, headers={"Content-Type": "application/json"}, method="POST", ua=UA_LOCAL)
+                js = json.loads(raw.decode()); break
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 5: raise
+                time.sleep(4 * (attempt + 1))
+        for a, pp in zip(chunk, js):
+            if not pp: continue
+            pv = pp.get("publicationVenue") or {}; name = pv.get("name") or pp.get("venue") or ""
+            doi = ((pp.get("externalIds") or {}).get("DOI") or "")
+            real_doi = doi and not doi.lower().startswith("10.48550/")
+            if pv.get("type") == "conference" or real_doi:
+                out[a] = (abbr_from_name(name), f"S2: {name}" + (f" doi:{doi}" if real_doi else ""))
+    return out
+
+
+def crossref_by_title(title):
+    """Crossref 按标题找已发表版本（IEEE 会议/期刊有 DOI 的才找得到）：(缩写或None, 证据) 或 (None, None)。"""
+    try:
+        q = urllib.parse.quote(re.sub(r"[^\w\s-]", " ", title)[:200])
+        js = json.loads(get_text(f"https://api.crossref.org/works?query.bibliographic={q}&rows=3&select=DOI,title,container-title,event,type", ua=UA_LOCAL))
+    except Exception: return None, None
+    for it in js.get("message", {}).get("items", []):
+        if it.get("DOI", "").lower().startswith("10.48550/"): continue
+        if norm_title((it.get("title") or [""])[0]) != norm_title(title): continue
+        name = (it.get("container-title") or [""])[0] or (it.get("event") or {}).get("name", "")
+        return abbr_from_name(name), f"Crossref: {name} doi:{it['DOI']}"
+    return None, None
+
+
+def lookup_published(m, text=None, s2=None):
+    """arXiv 预印本查有没有中稿：arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref。回填 m['venue'] / m['venue_src']。"""
+    if m.get("venue_src") != "default": return
+    v, ev = venue_from_pdf(text) if text else (None, None)
+    if v: m["venue"], m["venue_src"] = v, f"pdf: {ev}"; return
+    s2 = s2 if s2 is not None else s2_venues([m["id"]])
+    if m["id"] in s2:
+        ab, ev = s2[m["id"]]
+        m["venue"], m["venue_src"] = (ab, ev) if ab else ("arXiv", f"default（S2 说是 {ev}，缩写表里没有 ⚠）"); 
+        if ab: return
+    ab, ev = crossref_by_title(m["title"])
+    if ab: m["venue"], m["venue_src"] = ab, ev
+    elif ev: m["venue_src"] = f"default（{ev}，缩写表里没有 ⚠）"
+
+
 def make_title(m, name=None, venue=None, date_=None):
     return f"[{date_ or fmt_date(m.get('date'))}] [{venue or m.get('venue') or '????'}] {name or m['title']}".strip()
 
@@ -352,6 +409,7 @@ def fetch_one(link):
             got = pdf_first_page_date(text, m.get("pub_year"))
             if got: m["date"], m["date_src"] = got
             m["item"]["date"] = m["date"]
+    if m["source"] == "arxiv": lookup_published(m, text if os.path.exists(pdf) else None)   # 预印本查中稿，查到就写会议
     m["proposed_title"] = make_title(m)
     dup = find_duplicate(m); m["duplicate"] = {"key": dup["key"], "title": dup["title"]} if dup else None
     json.dump(m, open(os.path.join(INBOX, m["slug"] + ".json"), "w"), ensure_ascii=False, indent=1)
@@ -465,6 +523,72 @@ def add_collection(key, name, wait=180):
     return "ok"
 
 
+# ---------- recheck：库里的 arXiv 条目复核标题 ----------
+def recheck(write=False, only=None, dates=False):
+    """[arXiv] 标题查中稿（arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref）；--dates 再核对日期是否 v1 提交日。
+    先跑 dump_zotero.py。默认只列表；--write 才经 Web API 改标题（approval mode：先给用户看表）。"""
+    from config import DATA_DIR
+    items = json.load(open(os.path.join(HERE, "library_dump.json")))
+    cands = []
+    for it in items:
+        if only and it["key"] not in only: continue
+        aid = None                                                       # 只认 arxiv.org 链接或 10.48550/arXiv.* 的 DOI，别的 DOI 里的数字会误配
+        for blob in ((it.get("url") or ""), (it.get("doi") or "")):
+            if "arxiv.org" in blob.lower() or blob.lower().startswith("10.48550/arxiv."):
+                got = re.search(ARXIV_ID, blob); aid = got.group(1) if got else None
+                if aid: break
+        is_arxiv = "[arXiv]" in it["title"]
+        text = ""
+        if is_arxiv and it.get("pdfs"):
+            text = subprocess.run(["pdftotext", "-l", "1", os.path.join(DATA_DIR, it["pdfs"][0]), "-"], capture_output=True, text=True).stdout
+            if not aid:
+                got = re.search(r"arXiv:" + ARXIV_ID, text); aid = got.group(1) if got else None
+        if is_arxiv or (dates and aid): cands.append(dict(key=it["key"], title=it["title"], aid=aid, text=text, is_arxiv=is_arxiv))
+    ids = list(dict.fromkeys(c["aid"] for c in cands if c["aid"]))
+    ax = {}                                                             # arXiv API 一次批量：comment/journal_ref + v1 日期
+    ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
+    for i in range(0, len(ids), 80):
+        chunk = ids[i:i + 80]
+        for e in ET.fromstring(get_text("https://export.arxiv.org/api/query?id_list=" + ",".join(chunk) + f"&max_results={len(chunk)}")).findall("a:entry", ns):
+            a = re.search(ARXIV_ID, e.findtext("a:id", "", ns))
+            if a: ax[a.group(1)] = dict(ctx=ws(e.findtext("x:comment", "", ns)) + " " + ws(e.findtext("x:journal_ref", "", ns)),
+                                        v1=e.findtext("a:published", "", ns)[:10], latest=e.findtext("a:updated", "", ns)[:10])
+    s2 = s2_venues([c["aid"] for c in cands if c["is_arxiv"] and c["aid"]])
+    rows = []
+    for c in cands:
+        new, why = c["title"], []
+        if c["is_arxiv"]:
+            m = dict(id=c["aid"], title=re.sub(r"^(\s*\[[^\]]*\]\s*){1,2}", "", c["title"]), venue="arXiv", venue_src="default")
+            v = venue_from_context(ax.get(c["aid"], {}).get("ctx", ""))
+            if v: m["venue"], m["venue_src"] = v, "arxiv-comment: " + ax[c["aid"]]["ctx"][:80]
+            else: lookup_published(m, c["text"], s2 if c["aid"] else {})
+            if m["venue"] != "arXiv": new = new.replace("[arXiv]", f"[{m['venue']}]", 1); why.append(m["venue_src"])
+            elif m["venue_src"] != "default": why.append(m["venue_src"])
+        if dates and c["aid"] in ax:
+            d = re.match(r"\[(\d{4})-(\d{2})(\d{2})\]", c["title"]); v1 = ax[c["aid"]]["v1"]
+            if d and f"{d.group(1)}-{d.group(2)}-{d.group(3)}" != v1:
+                new = f"[{v1[:4]}-{v1[5:7]}{v1[8:]}]" + new[len(d.group(0)):]
+                why.append(f"日期 {d.group(0)} 不是 v1 提交日 {v1}（最新版 {ax[c['aid']]['latest']}）")
+        rows.append((c["key"], c["title"], new if new != c["title"] else None, "; ".join(why)))
+        mark = f"→ {new[:60]}" if new != c["title"] else ("（仍是 arXiv）" if c["is_arxiv"] else "ok")
+        print(f"{c['key']} | {c['title'][:60]} | {mark} | {'; '.join(why)[:120]}")
+    hits = [r for r in rows if r[2]]
+    print(f"\n{len(rows)} 条复核，要改标题 {len(hits)} 条。")
+    if not write or not hits: return
+    env = zapi.load_env(); done = []
+    for key, old, new, why in hits:
+        st, h, it = zapi.req(env, "GET", f"/items/{key}")
+        if st != 200: print(f"  ✗ {key} GET {st}"); continue
+        if it["data"]["title"] != old: print(f"  ✗ {key} 远端标题和 dump 不一致，跳过: {it['data']['title'][:60]}"); continue
+        st, h, body = zapi.req(env, "PATCH", f"/items/{key}", {"title": new, "version": it["version"]})
+        print(f"  {'ok' if st in (200, 204) else '✗ ' + str(st)} {key} {old[:40]!r} -> {new[:60]!r}")
+        if st in (200, 204): done.append((key, old, new, why))
+    if done:
+        with open(LOG, "a") as f:
+            f.write(f"\n## {date.today()} — recheck（arXiv 条目标题复核）\n### Applied\n")
+            for key, old, new, why in done: f.write(f"- {key} | {old[:60]} -> {new[:70]} | {why[:110]}\n")
+
+
 # ---------- main ----------
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"): print(__doc__); return
@@ -487,6 +611,10 @@ def main(argv):
         save(a.slug, a.collection, a.tags.split(","), also=a.also, venue=a.venue, date_=a.date, name=a.name, force=a.force)
     elif cmd == "collect":
         print(add_collection(args[0], args[1]))
+    elif cmd == "recheck":
+        only = None
+        if "--only" in args: only = set(args[args.index("--only") + 1].split(","))
+        recheck(write="--write" in args, only=only, dates="--dates" in args)
     else: print(__doc__)
 
 
