@@ -57,10 +57,10 @@ NOT_A_STATEMENT = re.compile(r"^\s*\[\d+\]|et al\.|arXiv preprint|arXiv:\d|pp\.\
 
 def venue_from_pdf(text):
     """从 PDF 首页文本找出版声明 → (缩写, 证据行)；找不到 (None, None)。"""
-    first = (text or "").split("\f")[0]
-    for line in first.split("\n"):
-        s = line.strip()
-        if not s or len(s) > 200 or NOT_A_STATEMENT.search(s) or not PDF_VENUE_LINE.search(s): continue
+    lines = [l.strip() for l in (text or "").split("\f")[0].split("\n") if l.strip()]
+    cands = lines + [a + " " + b for a, b in zip(lines, lines[1:])]        # 页脚声明常换行（ICML 模板），再看相邻两行拼起来的
+    for s in cands:
+        if len(s) > 260 or NOT_A_STATEMENT.search(s) or not PDF_VENUE_LINE.search(s): continue
         v = venue_from_context(s)
         if v: return v, s[:120]
     return None, None

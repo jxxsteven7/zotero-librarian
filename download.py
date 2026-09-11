@@ -8,7 +8,7 @@
                                             经 Zotero 桌面端 connector 接口入库：建条目 → 进分类+贴标签 → 送 PDF
   python3 download.py collect <itemKey> <collection>   事后经 Web API 追加第二个分类（save --also 同步没等到时用）
   python3 download.py list                  列出 inbox 里还没入库的
-  python3 download.py recheck [--dates] [--write] [--only K1,K2]
+  python3 download.py recheck [--dates] [--search] [--write] [--only K1,K2]
                                             复核库里的 arXiv 条目：[arXiv] 标题查中稿（arXiv comment / PDF 首页声明 / Semantic Scholar /
                                             Crossref / 项目页）；--dates 再核对标题日期是否 v1 提交日。默认只列表，--write 才经 Web API 改标题
 
@@ -565,8 +565,9 @@ def add_collection(key, name, wait=180):
 
 
 # ---------- recheck：库里的 arXiv 条目复核标题 ----------
-def recheck(write=False, only=None, dates=False):
-    """[arXiv] 标题查中稿（arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref）；--dates 再核对日期是否 v1 提交日。
+def recheck(write=False, only=None, dates=False, search=False):
+    """[arXiv] 标题查中稿（arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref → 项目页）；--dates 再核对日期是否 v1 提交日；
+    --search 对没有 arXiv 链接/水印的条目按标题去 arXiv 搜预印本（期刊/会议论文若有更早的预印本，日期用预印本 v1；每条 3 秒）。
     先跑 dump_zotero.py。默认只列表；--write 才经 Web API 改标题（approval mode：先给用户看表）。"""
     from config import DATA_DIR
     items = json.load(open(os.path.join(HERE, "library_dump.json")))
@@ -584,6 +585,10 @@ def recheck(write=False, only=None, dates=False):
             text = subprocess.run(["pdftotext", "-l", "1", os.path.join(DATA_DIR, it["pdfs"][0]), "-"], capture_output=True, text=True).stdout
             if not aid:
                 got = re.search(r"arXiv:" + ARXIV_ID, text); aid = got.group(1) if got else None
+        if not aid and search and dates:                                  # 按标题搜 arXiv（用户短名如 "PPO" 搜不到，跳过）
+            name = re.sub(r"^(\s*\[[^\]]*\]\s*){1,3}", "", it["title"]); name = re.sub(r"[✅❗]", "", name).strip()
+            if len(re.sub(r"[^\x20-\x7e]", "", name)) >= 12:
+                aid = arxiv_by_title(name); time.sleep(3)
         if is_arxiv or (dates and aid): cands.append(dict(key=it["key"], title=it["title"], aid=aid, text=text, is_arxiv=is_arxiv, abstract=it.get("abstract", "")))
     ids = list(dict.fromkeys(c["aid"] for c in cands if c["aid"]))
     ax = {}                                                             # arXiv API 一次批量：comment/journal_ref + v1 日期
@@ -663,7 +668,7 @@ def main(argv):
     elif cmd == "recheck":
         only = None
         if "--only" in args: only = set(args[args.index("--only") + 1].split(","))
-        recheck(write="--write" in args, only=only, dates="--dates" in args)
+        recheck(write="--write" in args, only=only, dates="--dates" in args, search="--search" in args)
     else: print(__doc__)
 
 

@@ -69,9 +69,10 @@
 
 ## 4. 标题格式：`[YYYY-MMDD] [刊/会] 原名`
 
-- 日期精确到天。arXiv 论文用 **v1 提交日**（arXiv API `published`，UTC）——代表这篇最早出现在学术界的日子，
-  **之后作者更新版本、用户重下最新版、中稿改了第二个括号，日期都不动**（用户 2026-09-12 定）。期刊用**在线发表日**——PDF 首页印的
-  "Available online / Published online / Date of publication"，其次 Crossref `published-online`；
+- 日期精确到天，含义是**这篇最早出现在学术界的日子**（用户 2026-09-12 定）。arXiv 论文用 **v1 提交日**（arXiv API `published`，UTC），
+  **之后作者更新版本、用户重下最新版、中稿改了第二个括号，日期都不动**。期刊/会议论文**若有更早的 arXiv 预印本，也用预印本 v1**
+  （`recheck --dates --search` 会按标题去 arXiv 搜；RL-100 就是 SR 2026 但 arXiv 2025-10）；机构自己官网先发、后传 arXiv 的（PI 的 RL Token）用官网日。
+  没有预印本的期刊用**在线发表日**——PDF 首页印的 "Available online / Published online / Date of publication"，其次 Crossref `published-online`；
   Crossref `created` 只在与出版年相差 ≤1 时可用（老论文的 created 是 DOI 登记日，不可信）；
   PDF 正文里抓到的日期要和出版年对得上，否则是引用噪音。拿不到精确日期就能到哪写哪（`[1999-07]`、`[1987]`），**不编造日子**。
 - 刊/会用缩写：CoRL RSS ICRA IROS ICLR ICML NeurIPS CVPR AISTATS · ESWA EAAI KBS ASOC SWEVO INS AES CAIE NCA JOGO
@@ -121,8 +122,12 @@
 
 - 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual）；同日新建 `Humanoid` 分类，BFM-Zero 从 AI Foundation 移入，
   SPIDER 两个分类共享。`recheck` 查出 6 篇已中稿的 `[arXiv]` 改成 RSS/IROS/ICRA（证据是 DOI）；其余 29 篇 API 和项目页都查不到录用信息，保留。
-  **待用户批：21 条标题日期不是 v1 提交日**（`recheck --dates` 列表）。
-- **PDF 文件名被 Zotero 连带改过**（见 §4），用户需在 Zotero 里改文件名模板 + 跑一次改回脚本；做完之前每次改标题都会再改一批文件名。
+  同日 `/goal` 全库复核完成：21 条日期改成 v1；5 条期刊/会议条目改成更早的预印本 v1（FR9BMARE、π0.6、π0.7、RL-100、Prismatic）；
+  32 条非 arXiv 刊/会标签经 S2/Crossref/PDF 首页核实一致，0 条矛盾；标签补 4 摘 2（RDP、ALOHA +teleop；T-Rex +diffusion；Show-Harness +action-chunking；
+  π0.6 −base:pi0.5；UniTacHand 去掉多余的 status:to-read）。PDF 文件名用户已按 §4 改好模板并跑过改回脚本，全库只剩三个昵称括号在文件名里（按设计）。
+- **留给用户的**：`NWMWYY4Z` EEFO 下面挂着一个 `ABC_2007.pdf`（内容是 Karaboga 2007 ABC，`JM8BGX33` 已有），疑似误挂；
+  `DS2CBILL` AlexNet 收的是 CACM 2017 重印版，原文是 NeurIPS 2012；`ESK4SDNZ` 的 `[IJRR]` 是用户自己写的，API/PDF 里查不到；
+  `AP8LAAEQ` MoDE-VLA 有 3 个 method（rl/vla/teleop，teleop 是用户 09-11 批的）；`UHXQKX93` MINT 无机器人本体，embod 留空。
 - 121 篇（用户自己把 `Z6QB6YQG` NSM-SFS 2023 扔进了回收站）全部贴齐标签、归入分类、标题统一格式；arXiv 自动标签已清空；
   4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 测试时收了 π0（`HKWZ6MV2`）。
 - `KNFD9629`（HS2001）与 `GUHVP29Z` 是同一篇 Harmony Search 的重复条目，留给用户处理。

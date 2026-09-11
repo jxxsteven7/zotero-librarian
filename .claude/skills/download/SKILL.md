@@ -51,7 +51,8 @@ description: |
 
 ## 存量复核
 
-用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1 提交日）
+用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1 提交日；
+再加 `--search` 会给没有 arXiv 链接的条目按标题搜预印本，每条 3 秒，全库约 4 分钟）
 只列表不写；把表给用户（key | 现标题 | 建议 | 证据），批准后 `python3 download.py recheck [--dates] --write [--only K1,K2]`。
 对仍是 `[arXiv]` 的可再逐篇 WebSearch。改标题会连带改 PDF 文件名（见 CLAUDE.md §4），用户没改好模板前先提醒一句。
 

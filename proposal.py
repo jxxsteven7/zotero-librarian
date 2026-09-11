@@ -55,7 +55,7 @@ P = {
  "P8FKX826": ([DM], ["rl"], ["gripper","single-arm"], [], [], ["vision"], "to-read", "UR7e + Robotiq 2F-85, 无灵巧手; 蒸馏到 RGB 策略"),
  "FR9BMARE": ([DM], ["rl"], ["dex-hand"], [], [], ["tactile"], "to-read", "Columbia 自研手, 本体+二值触觉"),
  "SMPNMTCV": ([DM], ["policy-learning"], ["dex-hand"], ["transformer"], [], [], "to-read", "LEAP, BC 蒸馏专家策略"),
- "N84MPX5T": ([DM], ["vla","rl"], ["gripper","bimanual"], ["flow-matching","action-chunking","hil"], ["pi0.5"], ["vision","language"], "to-read", "RECAP; π0.6 源自 π0.5 故贴 base:pi0.5; 静态双臂+移动"),
+ "N84MPX5T": ([DM], ["vla","rl"], ["gripper","bimanual"], ["flow-matching","action-chunking","hil"], [], ["vision","language"], "to-read", "RECAP; π0.6 源自 π0.5 故贴 base:pi0.5; 静态双臂+移动"),
  "DS2CBILL": ([MISC], ["foundation-model"], [], [], [], [], "to-read", "1 条批注"),
  "7EUPJN44": ([DM], ["rl","foundation-model"], ["dex-hand"], [], [], [], "to-read", "LLM 写奖励; 仿真 Shadow Hand 转笔 + Isaac Gym 任务"),
  "N7NPRGW8": ([DM], [], ["dex-hand","bimanual"], [], [], ["vision","tactile"], "to-read", "双 UR7e + Sharpa Wave, Quest 3 → 提议 method:teleop"),
@@ -111,6 +111,12 @@ _add("MWAF9GHZ", "base", "pi0.6")
 # 2026-09-12 用户批准（翻正文核过）：SPIDER 3 个双手数据集/8 个双手任务；Eureka 的 Dexterity 套件是 20 个双 Shadow Hand 仿真任务
 _add("G2KU4YKI", "embod", "bimanual")
 _add("7EUPJN44", "embod", "bimanual")
+# 2026-09-12 全库复核（/goal "确保无误"），正文核过：
+_add("NSQ8FPP4", "method", "teleop")          # RDP：TactAR 遥操系统是论文列出的贡献之一
+_add("6Z4ZT39B", "method", "teleop")          # ALOHA/ACT：ALOHA 遥操硬件是贡献之一
+_add("FBQP3MT6", "tech", "diffusion")         # T-Rex："we propose a visual-tactile diffusion policy" 做高频触觉反应细化
+_add("6Z789W2Q", "tech", "action-chunking")   # Show-Harness："Action Chunking" 是 Harness 的组件之一
+UNTAG = {"N84MPX5T": ["base:pi0.5"]}           # π0.6 论文：π0.6 是新模型（Gemma 3 4B 骨干，"derived from π0.5" 指配方），不是微调 π0.5 → 按规则不贴
 # type: 轴（与 method 正交）
 EXTRA_TAGS = {"DY3EK5IJ": ["type:survey"], "ESK4SDNZ": ["type:survey"],
               "6VBEISKD": ["type:benchmark"], "DEBKIIKT": ["type:benchmark"],

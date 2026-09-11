@@ -7,7 +7,7 @@
 
 凭据与路径：同目录 .env（见 config.py）。key 只读文件，不打印。
 规则：只增标签/分类、不删任何东西；自动标签(type=1)原样保留；只改 RENAMES 里的标题。
-例外只有两个：RETAG（词表改名）会从条目上摘掉旧标签；UNCOLLECT 会把条目移出指定分类。
+例外只有三个：RETAG（词表改名）会从条目上摘掉旧标签；UNTAG 摘掉某条目贴错的标签；UNCOLLECT 会把条目移出指定分类。
 """
 import argparse, datetime, json, os, re, sqlite3, sys, time, urllib.request, urllib.error, importlib.util
 
@@ -22,6 +22,7 @@ proposal = importlib.util.module_from_spec(spec); spec.loader.exec_module(propos
 P, RENAMES = proposal.P, proposal.RENAMES
 RETAG = getattr(proposal, "RETAG", {})   # 旧标签→新标签，作用于库里所有带旧标签的条目（不限于 P）
 UNCOLLECT = getattr(proposal, "UNCOLLECT", {})   # key → 要移出的分类名列表
+UNTAG = getattr(proposal, "UNTAG", {})           # key → 要摘掉的标签列表（贴错的）
 ROOTS = ["Evolution Algorithm", "Dex-Manipulation", "AI Foundation", "Humanoid"]   # Misc 于 2026-09-11 改名 AI Foundation；Humanoid 2026-09-12 新建
 
 
@@ -69,9 +70,9 @@ def build_updates(items, colls, only=None, rename=True, status=True):
         cur = items[key]; patch = {"key": key, "version": cur["version"]}; diff = []
         have = {t["tag"] for t in cur["tags"]}
         # RETAG：摘掉旧标签，补上新标签（新标签已有就只摘）
-        old = [t for t in have if t in RETAG]
-        keep = [t for t in cur["tags"] if t["tag"] not in RETAG]
-        want = [RETAG[t] for t in sorted(old) if RETAG[t] not in have]
+        old = [t for t in have if t in RETAG] + [t for t in UNTAG.get(key, []) if t in have]
+        keep = [t for t in cur["tags"] if t["tag"] not in RETAG and t["tag"] not in UNTAG.get(key, [])]
+        want = [RETAG[t] for t in sorted(old) if t in RETAG and RETAG[t] not in have]
         if key in P:
             # status 不降级：已有 status:* 则不再加
             want += [t for t in desired_tags(key, status and not any(t.startswith("status:") for t in have)) if t not in have and t not in want]
