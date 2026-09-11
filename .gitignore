@@ -1,0 +1,8 @@
+# 凭据
+.env
+# 本机生成物（可再生；含库内容/笔记/论文全文，不进 git）
+library_dump*.json
+inbox/
+__pycache__/
+*.pyc
+zotero-organize.proposal.md
