@@ -10,7 +10,7 @@
   python3 download.py list                  列出 inbox 里还没入库的
   python3 download.py recheck [--dates] [--write] [--only K1,K2]
                                             复核库里的 arXiv 条目：[arXiv] 标题查中稿（arXiv comment / PDF 首页声明 / Semantic Scholar /
-                                            Crossref）；--dates 再核对标题日期是否 v1 提交日。默认只列表，--write 才经 Web API 改标题
+                                            Crossref / 项目页）；--dates 再核对标题日期是否 v1 提交日。默认只列表，--write 才经 Web API 改标题
 
 链接支持：arXiv（abs/pdf/html/裸 id/alphaxiv/hf papers）、DOI（doi.org 或裸 DOI）、OpenReview、直接 PDF 链接、本地 PDF 路径、带 citation_* meta 的网页。
 付费期刊的 PDF 抓不到时条目照建（没附件），用户可事后把 PDF 拖进 Zotero，或把下好的 PDF 路径给 fetch。
@@ -331,19 +331,60 @@ def crossref_by_title(title):
     return None, None
 
 
+URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
+NOT_PROJECT_HOSTS = ("arxiv.org", "doi.org", "openreview.net", "semanticscholar.org", "youtube.com", "youtu.be", "creativecommons.org",
+                     "huggingface.co/papers", "orcid.org", "ieee.org", "acm.org", "overleaf.com")
+
+
+def project_urls(m, text=None):
+    """论文的项目页 / 代码页候选：arXiv comment、摘要、PDF 首页里的链接（去掉 arXiv/DOI 这类），最多 3 个。"""
+    blob = " ".join(x for x in (m.get("comment"), m.get("abstract"), (text or "").split("\f")[0]) if x)
+    out = []
+    for u in URL_RE.findall(blob):
+        u = u.rstrip(".,;:)")
+        if any(h in u.lower() for h in NOT_PROJECT_HOSTS) or u in out: continue
+        out.append(u)
+    return out[:3]
+
+
+def venue_from_page(url):
+    """抓项目页/README，找 "Accepted to CoRL 2026" 这类声明 → (缩写, 证据) ；写着 under review / anonymous 返回 (None, 说明)。"""
+    try: page = get_text(url, timeout=30)
+    except Exception: return None, None
+    txt = re.sub(r"<!--.*?-->", " ", page, flags=re.S)                  # 注释里常留着模板的 "Anonymous Author(s)"，不算
+    txt = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", txt, flags=re.S | re.I)
+    txt = ws(html.unescape(re.sub(r"<[^>]+>", " ", txt)))
+    if re.search(r"anonymous submission|under review", txt, re.I): return None, f"{url} 写着 under review / anonymous"
+    head = txt[:800]                                                    # 页头徽章：直接写 "CoRL 2025"
+    v = venue_from_context(head)
+    if v and re.search(r"(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats)\W{0,3}20\d\d", head, re.I):
+        return v, f"{url} 页头: " + re.search(r".{0,50}(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats)\W{0,3}20\d\d.{0,30}", head, re.I).group(0)
+    for s in re.split(r"(?<=[.!。])\s+", txt):
+        if len(s) > 300 or not re.search(r"accept|to appear|publish|presented at|\boral\b|spotlight|proceedings", s, re.I): continue
+        v = venue_from_context(s)
+        if v: return v, f"{url}: {s[:120]}"
+    return None, None
+
+
 def lookup_published(m, text=None, s2=None):
-    """arXiv 预印本查有没有中稿：arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref。回填 m['venue'] / m['venue_src']。"""
+    """arXiv 预印本查有没有中稿：arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref → 项目页。回填 m['venue'] / m['venue_src']。"""
     if m.get("venue_src") != "default": return
     v, ev = venue_from_pdf(text) if text else (None, None)
     if v: m["venue"], m["venue_src"] = v, f"pdf: {ev}"; return
     s2 = s2 if s2 is not None else s2_venues([m["id"]])
+    notes = []
     if m["id"] in s2:
         ab, ev = s2[m["id"]]
-        m["venue"], m["venue_src"] = (ab, ev) if ab else ("arXiv", f"default（S2 说是 {ev}，缩写表里没有 ⚠）"); 
-        if ab: return
+        if ab: m["venue"], m["venue_src"] = ab, ev; return
+        notes.append(f"S2 说是 {ev}，缩写表里没有 ⚠")
     ab, ev = crossref_by_title(m["title"])
-    if ab: m["venue"], m["venue_src"] = ab, ev
-    elif ev: m["venue_src"] = f"default（{ev}，缩写表里没有 ⚠）"
+    if ab: m["venue"], m["venue_src"] = ab, ev; return
+    if ev: notes.append(f"{ev}，缩写表里没有 ⚠")
+    for u in project_urls(m, text):
+        ab, ev = venue_from_page(u)
+        if ab: m["venue"], m["venue_src"] = ab, "project page " + ev; return
+        if ev: notes.append(ev)
+    if notes: m["venue_src"] = "default（" + "；".join(notes) + "）"
 
 
 def make_title(m, name=None, venue=None, date_=None):
@@ -539,11 +580,11 @@ def recheck(write=False, only=None, dates=False):
                 if aid: break
         is_arxiv = "[arXiv]" in it["title"]
         text = ""
-        if is_arxiv and it.get("pdfs"):
+        if (is_arxiv or (dates and not aid)) and it.get("pdfs"):            # 首页文本：查出版声明；url 里没 arXiv 号的从首页水印认
             text = subprocess.run(["pdftotext", "-l", "1", os.path.join(DATA_DIR, it["pdfs"][0]), "-"], capture_output=True, text=True).stdout
             if not aid:
                 got = re.search(r"arXiv:" + ARXIV_ID, text); aid = got.group(1) if got else None
-        if is_arxiv or (dates and aid): cands.append(dict(key=it["key"], title=it["title"], aid=aid, text=text, is_arxiv=is_arxiv))
+        if is_arxiv or (dates and aid): cands.append(dict(key=it["key"], title=it["title"], aid=aid, text=text, is_arxiv=is_arxiv, abstract=it.get("abstract", "")))
     ids = list(dict.fromkeys(c["aid"] for c in cands if c["aid"]))
     ax = {}                                                             # arXiv API 一次批量：comment/journal_ref + v1 日期
     ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
@@ -553,12 +594,20 @@ def recheck(write=False, only=None, dates=False):
             a = re.search(ARXIV_ID, e.findtext("a:id", "", ns))
             if a: ax[a.group(1)] = dict(ctx=ws(e.findtext("x:comment", "", ns)) + " " + ws(e.findtext("x:journal_ref", "", ns)),
                                         v1=e.findtext("a:published", "", ns)[:10], latest=e.findtext("a:updated", "", ns)[:10])
+    for a in [i for i in ids if i not in ax]:                              # 批量查偶尔漏条目，单个补一次
+        try:
+            e = ET.fromstring(get_text(f"https://export.arxiv.org/api/query?id_list={a}")).find("a:entry", ns)
+            if e is not None and e.findtext("a:published", "", ns):
+                ax[a] = dict(ctx=ws(e.findtext("x:comment", "", ns)) + " " + ws(e.findtext("x:journal_ref", "", ns)),
+                             v1=e.findtext("a:published", "", ns)[:10], latest=e.findtext("a:updated", "", ns)[:10])
+        except Exception: pass
     s2 = s2_venues([c["aid"] for c in cands if c["is_arxiv"] and c["aid"]])
     rows = []
     for c in cands:
         new, why = c["title"], []
         if c["is_arxiv"]:
-            m = dict(id=c["aid"], title=re.sub(r"^(\s*\[[^\]]*\]\s*){1,2}", "", c["title"]), venue="arXiv", venue_src="default")
+            m = dict(id=c["aid"], title=re.sub(r"^(\s*\[[^\]]*\]\s*){1,2}", "", c["title"]), venue="arXiv", venue_src="default",
+                     comment=ax.get(c["aid"], {}).get("ctx", ""), abstract=c.get("abstract", ""))
             v = venue_from_context(ax.get(c["aid"], {}).get("ctx", ""))
             if v: m["venue"], m["venue_src"] = v, "arxiv-comment: " + ax[c["aid"]]["ctx"][:80]
             else: lookup_published(m, c["text"], s2 if c["aid"] else {})

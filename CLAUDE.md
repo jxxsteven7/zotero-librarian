@@ -69,16 +69,19 @@
 
 ## 4. 标题格式：`[YYYY-MMDD] [刊/会] 原名`
 
-- 日期精确到天。arXiv 论文用 **v1 提交日**（arXiv API `published`）；期刊用**在线发表日**——PDF 首页印的
+- 日期精确到天。arXiv 论文用 **v1 提交日**（arXiv API `published`，UTC）——代表这篇最早出现在学术界的日子，
+  **之后作者更新版本、用户重下最新版、中稿改了第二个括号，日期都不动**（用户 2026-09-12 定）。期刊用**在线发表日**——PDF 首页印的
   "Available online / Published online / Date of publication"，其次 Crossref `published-online`；
   Crossref `created` 只在与出版年相差 ≤1 时可用（老论文的 created 是 DOI 登记日，不可信）；
   PDF 正文里抓到的日期要和出版年对得上，否则是引用噪音。拿不到精确日期就能到哪写哪（`[1999-07]`、`[1987]`），**不编造日子**。
 - 刊/会用缩写：CoRL RSS ICRA IROS ICLR ICML NeurIPS CVPR AISTATS · ESWA EAAI KBS ASOC SWEVO INS AES CAIE NCA JOGO
   CMAME ATE SOCO TEVC AMM CACM Access SR IJRR CEC · Book · TechReport；纯 arXiv 预印本写 `[arXiv]`，中稿后改。
   来源优先级：用户已写 > Zotero 字段 > 笔记/arXiv comment 里的 "Accepted to …" > PDF 首页出版声明 > Semantic Scholar（只认
-  type=conference 或非 arXiv DOI）> Crossref 标题搜索（RSS/IEEE 有 DOI）> WebSearch 项目页/README 的 "Accepted to …" > 常识（标 ⚠ 请用户过目）。
-  **用户习惯下 arXiv 最新版，但已中稿的要写会议不写 `[arXiv]`**；`download.py` 收新论文时自动查前几层，
-  `download.py recheck` 定期给存量 `[arXiv]` 补查（DBLP 和 OpenReview 都有人机验证，脚本用不了）。
+  type=conference 或非 arXiv DOI）> Crossref 标题搜索（RSS/IEEE 有 DOI）> 项目页/README（arXiv comment、摘要、PDF 首页里的链接，
+  找 "Accepted to …" 或页头徽章 "CoRL 2025"；写 under review/anonymous 的记下）> WebSearch > 常识（标 ⚠ 请用户过目）。
+  **用户习惯下 arXiv 最新版，但已中稿的要写会议不写 `[arXiv]`**；`download.py fetch` 收新论文时自动跑这条链，
+  `download.py recheck [--dates]` 给存量 `[arXiv]` 补查（`--dates` 同时核对日期是不是 v1）。DBLP 和 OpenReview 都有人机验证，脚本用不了。
+  查不到就保留 `[arXiv]`，不凭印象填会议。
 - 用户自己写的部分（短名 `GWO 2014`、昵称 `[VAE]` `[ALOHA/ACT]`、标记 ✅❗、`[ICRA-Best]`）**原样保留在两个括号之后，绝不改**。
 - **标题前缀只是显示用，PDF 文件名不要带**。Zotero 7+ 默认 `autoRenameFiles.onMetadataChange=true`：父条目标题一改，
   凡是文件名还是模板生成的附件就会跟着改名（2026-09-12 发现约 50 个 PDF 已经被改成 `作者 - 年 - [日期] [刊] 原名.pdf`）。
@@ -116,7 +119,10 @@
 - 仓库在 GitHub 私有库 `jxxsteven7/zotero-claude`，多台设备共用；新机器按 README 走一遍 `setup.sh`。
   `.env`、`library_dump*.json`、`inbox/` 不进 git。
 
-- 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual）；同日新建 `Humanoid` 分类，BFM-Zero 从 AI Foundation 移入（lib-version 3120）。
+- 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual）；同日新建 `Humanoid` 分类，BFM-Zero 从 AI Foundation 移入，
+  SPIDER 两个分类共享。`recheck` 查出 6 篇已中稿的 `[arXiv]` 改成 RSS/IROS/ICRA（证据是 DOI）；其余 29 篇 API 和项目页都查不到录用信息，保留。
+  **待用户批：21 条标题日期不是 v1 提交日**（`recheck --dates` 列表）。
+- **PDF 文件名被 Zotero 连带改过**（见 §4），用户需在 Zotero 里改文件名模板 + 跑一次改回脚本；做完之前每次改标题都会再改一批文件名。
 - 121 篇（用户自己把 `Z6QB6YQG` NSM-SFS 2023 扔进了回收站）全部贴齐标签、归入分类、标题统一格式；arXiv 自动标签已清空；
   4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 测试时收了 π0（`HKWZ6MV2`）。
 - `KNFD9629`（HS2001）与 `GUHVP29Z` 是同一篇 Harmony Search 的重复条目，留给用户处理。

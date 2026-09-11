@@ -32,12 +32,12 @@ description: |
    - 词表外的新值不要私造：留空，汇报里写"建议新标签 xxx，理由"。
 
 3. **核对标题前缀**：日期取 arXiv v1 提交日或期刊在线发表日，`YYYY-MMDD`；刊/会用缩写。
-   **用户下的是 arXiv 版但多半已中稿，标题要写会议/期刊，不写 `[arXiv]`。** 脚本对 arXiv 条目自动查四层：
-   arXiv comment/journal_ref → PDF 首页出版声明 → Semantic Scholar → Crossref（RSS/IEEE 有 DOI，查得到），
-   查到就直接填进"刊/会 ←"并注明证据。**卡片仍是 `arXiv ← default` 时，再做一次 WebSearch**：
-   `"<论文原名>" accepted`（看项目页 / GitHub README / 作者主页有没有 "Accepted to CoRL 2026" 之类），
-   找到就 `--venue CoRL`，汇报备注里写证据链接；项目页写 "Anonymous Submission"/"under review" 或什么都没有就保留 `[arXiv]`，
-   备注 "未查到录用信息"。不要凭印象填会议。
+   **用户下的是 arXiv 版但多半已中稿，标题要写会议/期刊，不写 `[arXiv]`；日期永远是 v1 提交日，中稿了也不动。**
+   脚本对 arXiv 条目自动查五层：arXiv comment/journal_ref → PDF 首页出版声明 → Semantic Scholar → Crossref（RSS/IEEE 有 DOI）
+   → 项目页/README（comment、摘要、PDF 首页里的链接；找 "Accepted to …" 或页头 "CoRL 2025" 徽章），
+   查到就直接填进"刊/会 ←"并注明证据；项目页写 under review / anonymous 会在 `default（…）` 里注明。
+   卡片仍是 `arXiv ← default` 且没有项目页信息时，可再做一次 WebSearch `"<论文原名>" accepted`，找到才 `--venue X` 并在备注写证据链接；
+   什么都没有就保留 `[arXiv]`，备注 "未查到录用信息"。不要凭印象填会议。
    卡片里带 `⚠` 的来源（Crossref 不完整、OpenReview 日期、缩写表里没有的全名）要自己判断：
    全名刊物查 `venues.py` 没有缩写的，按用户习惯造一个缩写（首字母大写）并在汇报里标出来。日期拿不到精确的能到哪写哪，不编造。
 
@@ -51,8 +51,9 @@ description: |
 
 ## 存量复核
 
-用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1）
-只列表不写；把表给用户，批准后 `python3 download.py recheck --write [--only K1,K2]`。对仍是 `[arXiv]` 的可再逐篇 WebSearch。
+用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1 提交日）
+只列表不写；把表给用户（key | 现标题 | 建议 | 证据），批准后 `python3 download.py recheck [--dates] --write [--only K1,K2]`。
+对仍是 `[arXiv]` 的可再逐篇 WebSearch。改标题会连带改 PDF 文件名（见 CLAUDE.md §4），用户没改好模板前先提醒一句。
 
 ## 不要做的事
 

@@ -19,6 +19,7 @@ claude                                     # 在这个目录里开会话
 
 - `/download <arXiv/DOI/PDF 链接或本地 PDF 路径>...` —— 收论文：下载、建条目、按规则命名、归类、贴标签，status 默认 `to-read`。
   需要 Zotero 桌面端开着（PDF 走它的本地 connector 接口，因为附件同步是 WebDAV）。
+- `python3 download.py recheck [--dates]` —— 复核库里 arXiv 条目：查中稿改 `[arXiv]` 为会议、核对日期是否 v1；看表批准后加 `--write`。
 - 存量批量整理（approval mode）：`dump_zotero.py` → 在 `proposal.py` 加行 → `apply.py --dry-run` / `--plan` → 批准后 `--apply`。
 
 ## 文件
