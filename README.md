@@ -1,6 +1,6 @@
 # zotero-claude
 
-用 Claude Code 维护我的 Zotero 文献库：三个分类、`family:value` 受控标签、`[YYYY-MMDD] [刊/会] 原名` 标题。
+用 Claude Code 维护我的 Zotero 文献库：四个分类、`family:value` 受控标签、`[YYYY-MMDD] [刊/会] 原名` 标题。
 规则全在 [`CLAUDE.md`](CLAUDE.md)，Claude 在这个目录开会话时自动加载。
 
 ## 新机器

@@ -5,7 +5,7 @@ python3 proposal.py  -> 生成 zotero-organize.proposal.md
 import json, os
 rows = {r["key"]: r for r in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_dump.json")))}
 
-DM, MISC, EA = "Dex-Manipulation", "AI Foundation", "Evolution Algorithm"   # Misc 已改名 AI Foundation（分类 key 不变 DU25RH7B）
+DM, MISC, EA, HUM = "Dex-Manipulation", "AI Foundation", "Evolution Algorithm", "Humanoid"   # Misc 已改名 AI Foundation（分类 key 不变 DU25RH7B）；Humanoid 2026-09-12 新建
 
 # key: (collections, method, embod, tech, base, modality, status, note)
 P = {
@@ -34,7 +34,7 @@ P = {
  "NSQ8FPP4": ([DM], ["policy-learning"], ["gripper","single-arm","bimanual"], ["diffusion","action-chunking"], [], ["vision","tactile"], "to-read", "Flexiv Rizon + GelSight Mini/MCTac; TactAR 遥操"),
  "XSU4KP7E": ([DM], ["policy-learning"], ["dex-hand"], ["diffusion","transformer"], [], ["point-cloud","tactile"], "to-read", "Shadow Hand, Kinect Azure 点云"),
  "G2KU4YKI": ([DM], ["rl"], ["dex-hand"], [], [], [], "to-read", "采样式物理重定向, method:rl 存疑; 人形 Fourier N1/H1-2/Booster T1 + XHand/Ability/Inspire → 提议 embod:humanoid, method:teleop"),
- "H4WFCLBL": ([MISC], ["rl"], [], [], [], [], "to-read", "Unitree G1 全身控制, 非操作 → 按规则归 Misc; 用户原放 Dex-Hand, 请定; 提议 embod:humanoid"),
+ "H4WFCLBL": ([HUM], ["rl"], ["humanoid"], [], [], [], "to-read", "BFM-Zero 人形全身控制的行为基础模型；2026-09-12 用户新建 Humanoid 分类，从 AI Foundation 移入"),
  "UCJ6JZJN": ([DM], ["policy-learning"], ["gripper","bimanual"], ["diffusion"], [], ["point-cloud","tactile"], "to-read", "鳍形软夹爪+触觉阵列, 3D 统一表征"),
  "Y5MYSGWE": ([DM], ["rl"], ["dex-hand"], [], [], ["point-cloud","tactile"], "read", "10 条批注; Allegro + 16 FSR"),
  "9K8NGI3X": ([DM], ["rl"], ["dex-hand"], [], [], ["tactile"], "to-read", "Allegro + FSR, 纯触觉无视觉"),
@@ -94,7 +94,7 @@ P["KNFD9629"] = ([EA], [], [], [], [], [], "to-read", "与 GUHVP29Z 同一 PDF(�
 P["GUHVP29Z"] = ([EA], [], [], [], [], [], "to-read", "与 KNFD9629(HS2001) 重复; 需改名")
 
 # ---- 2026-09-11 用户批准后的修订（AskUserQuestion 答复）----
-P["H4WFCLBL"] = ([MISC], ["rl"], [], [], [], [], "to-read", "BFM-Zero 人形全身控制；Humanoid 分类已随只留三个分类的决定删除，归 AI Foundation; embod:humanoid")
+# H4WFCLBL 的 2026-09-11 修订（归 AI Foundation）已被 2026-09-12 的 Humanoid 分类取代，见上面 P 里的行
 P["UHXQKX93"] = ([DM], ["foundation-model"], [], ["transformer"], [], ["vision"], "to-read", "用户指示归 Dex-Manipulation; 需改名")
 def _add(key, fam, val):
     c, m, e, t, b, mo, s, n = P[key]; fams = {"method": m, "embod": e, "tech": t, "base": b, "modality": mo}
@@ -115,16 +115,11 @@ EXTRA_TAGS = {"DY3EK5IJ": ["type:survey"], "ESK4SDNZ": ["type:survey"],
 APPROVED_NEW = {"method:teleop", "method:grasp-synthesis", "embod:humanoid", "base:pi0.6", "type:survey", "type:benchmark", "type:dataset"}
 
 # ---- 标题补前缀 (只针对仍是导入原始标题的条目) ----
+UNCOLLECT = {"H4WFCLBL": [MISC]}   # 从分类里移出（apply 唯一会摘分类的路径）：BFM-Zero 移到 Humanoid 后不再留在 AI Foundation
 RETAG = {"embod:dual-arm": "embod:bimanual"}   # 词表改名：apply 会把库里所有旧标签换成新标签（含 P 之外的条目），2026-09-12 用户合并 dual-arm→bimanual
 RENAMES = {}   # 第一轮的 15 条改名已于 2026-09-11 写入并被之后的全库 [YYYY-MMDD] 改名覆盖（老→新对照在日志里）；再放东西进来前先看现有标题
 
-NEW_TAGS = [
- ("method:teleop", "遥操作系统 / 人手→机器手重定向, 现有 method 家族无一适用", "AnyTeleop, GeoRT, DexTeleop-0, TeleDexter, TopoRetarget, SPIDER, DexterityGen, MoDE-VLA"),
- ("method:grasp-synthesis", "抓取姿态合成(学习或程序化), 不是策略学习", "D(R,O) Grasp, T(R,O) Grasp, Lightning Grasp"),
- ("embod:humanoid", "人形整机(含带灵巧手的人形)", "BFM-Zero, SPIDER, EgoScale(G1/R1Pro)"),
- ("base:pi0.6", "冻结/微调 π0.6", "RL Token"),
- ("type:benchmark / type:survey / type:dataset", "文献类型轴, 与 method 正交; 综述/基准/数据集目前只能靠 Note 区分", "DexJoCo, RoboDojo(benchmark); VLA 综述, 世界模型综述(survey); Open X-Embodiment, ImageNet(dataset)"),
-]
+NEW_TAGS = []   # 第一轮提议的 teleop/grasp-synthesis/humanoid/pi0.6/type:* 已于 2026-09-11 批准并写进 CLAUDE.md 词表；再提新标签放这里（tag, 理由, 需要它的条目）
 
 def short(r):
     t = r["title"]
@@ -138,7 +133,7 @@ def md():
             "| # | Title | Collection(s) | method: | embod: | tech: | base: | modality: | status: | Note |",
             "|---|-------|---------------|---------|--------|-------|-------|-----------|---------|------|"]
     i = 0
-    order = [k for k in P if EA not in P[k][0]]
+    order = [k for k in P if EA not in P[k][0] and k in rows]   # 回收站里的（如 Z6QB6YQG）不在 dump 里，跳过
     for k in order:
         i += 1; c, m, e, t, b, mo, s, n = P[k]; r = rows[k]
         d = lambda l: ", ".join(l) if l else "—"
@@ -146,7 +141,7 @@ def md():
     out += ["", "## B. 进化算法（49 篇，含原未归类的 NSM-SFS 2023）", "",
             "全部 → `Evolution Algorithm` + `status:to-read`；method/embod/tech/modality 家族对这批不适用，留空。", "",
             "| # | Title | Note |", "|---|-------|------|"]
-    for k in [k for k in P if EA in P[k][0]]:
+    for k in [k for k in P if EA in P[k][0] and k in rows]:
         i += 1; out.append(f"| {i} | {short(rows[k])} `{k}` | {P[k][7]} |")
     out += ["", "## C. 标题补前缀（仅原始导入标题，你自己起过名的一律不动）", "",
             "格式按你说的 `[date] [刊/会] xxx`。arXiv 论文取 v1 提交日；期刊论文只有年月，写 `[YYYY-MM]`；无会议/期刊的纯 arXiv 省略第二个括号（与你现有 `[2026-0831] ❗ Motus2` 一致）。",

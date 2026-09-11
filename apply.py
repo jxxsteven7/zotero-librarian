@@ -7,7 +7,7 @@
 
 凭据与路径：同目录 .env（见 config.py）。key 只读文件，不打印。
 规则：只增标签/分类、不删任何东西；自动标签(type=1)原样保留；只改 RENAMES 里的标题。
-唯一的例外是 RETAG（词表改名）：把旧标签整体换成新标签，会从条目上摘掉旧标签。
+例外只有两个：RETAG（词表改名）会从条目上摘掉旧标签；UNCOLLECT 会把条目移出指定分类。
 """
 import argparse, datetime, json, os, re, sqlite3, sys, time, urllib.request, urllib.error, importlib.util
 
@@ -21,7 +21,8 @@ spec = importlib.util.spec_from_file_location("proposal", os.path.join(HERE, "pr
 proposal = importlib.util.module_from_spec(spec); spec.loader.exec_module(proposal)
 P, RENAMES = proposal.P, proposal.RENAMES
 RETAG = getattr(proposal, "RETAG", {})   # 旧标签→新标签，作用于库里所有带旧标签的条目（不限于 P）
-ROOTS = ["Evolution Algorithm", "Dex-Manipulation", "AI Foundation"]   # Misc 于 2026-09-11 被用户改名为 AI Foundation
+UNCOLLECT = getattr(proposal, "UNCOLLECT", {})   # key → 要移出的分类名列表
+ROOTS = ["Evolution Algorithm", "Dex-Manipulation", "AI Foundation", "Humanoid"]   # Misc 于 2026-09-11 改名 AI Foundation；Humanoid 2026-09-12 新建
 
 
 def target_keys(con):
@@ -83,9 +84,11 @@ def build_updates(items, colls, only=None, rename=True, status=True):
             continue
         want_c = [colls[n] for n in P[key][0] if n in colls and colls[n] not in cur["collections"]]
         need_c = [n for n in P[key][0] if n not in colls]
-        if want_c:
-            patch["collections"] = cur["collections"] + want_c
-            diff.append("+collection: " + ", ".join(n for n in P[key][0] if n in colls and colls[n] in want_c))
+        drop_c = [colls[n] for n in UNCOLLECT.get(key, []) if n in colls and colls[n] in cur["collections"]]
+        if want_c or drop_c:
+            patch["collections"] = [c for c in cur["collections"] if c not in drop_c] + want_c
+            if want_c: diff.append("+collection: " + ", ".join(n for n in P[key][0] if n in colls and colls[n] in want_c))
+            if drop_c: diff.append("−collection: " + ", ".join(n for n in UNCOLLECT[key] if n in colls and colls[n] in drop_c))
         if need_c: diff.append("(待建分类: " + ", ".join(need_c) + ")")
         if rename and key in RENAMES and cur["title"] != RENAMES[key]:
             patch["title"] = RENAMES[key]; diff.append(f"title: {cur['title'][:40]!r} -> {RENAMES[key][:60]!r}")

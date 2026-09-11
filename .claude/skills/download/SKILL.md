@@ -1,7 +1,7 @@
 ---
 name: download
 description: |
-  把论文链接收进 Zotero：下载 PDF、建条目、按规则命名（[YYYY-MMDD] [刊/会] 原名）、归入三分类之一、
+  把论文链接收进 Zotero：下载 PDF、建条目、按规则命名（[YYYY-MMDD] [刊/会] 原名）、归入四分类之一、
   按受控词表打标签，status 默认 to-read。用法 /download <链接或本地 PDF 路径>...（arXiv / DOI / OpenReview /
   PDF 直链 / 项目页）。端到端自动完成，不逐篇征求批准，做完给汇总表。
 ---
@@ -25,7 +25,8 @@ description: |
 2. **读论文定标签**：不能只看标题。读摘要 + `grep -n -i "<关键词>" inbox/<slug>.txt` 查实验部分
    （本体：UR5/Franka/ALOHA/dex hand/humanoid/gripper；输入：tactile/depth/point cloud/language；骨干：π0/GR00T；
    机制：flow matching/diffusion/chunk/intervention/reasoning）。按 CLAUDE.md §3 的判定规则决定：
-   - 分类：`Evolution Algorithm` / `Dex-Manipulation` / `AI Foundation`，一篇一个；综述才 `--also` 加第二个。
+   - 分类：`Evolution Algorithm` / `Dex-Manipulation` / `Humanoid` / `AI Foundation`，一篇一个；综述、或既做灵巧手又做人形全身的才 `--also` 加第二个。
+     Humanoid 放研究对象是人形本身的（全身控制/运动/人形遥操）；在人形上做操作的仍归 Dex-Manipulation + `embod:humanoid`；AI Foundation 只放纯 learning。
    - `method:` 1–2 个；`embod:` `tech:` `base:` `modality:` 只标真正用到的，判不出留空；`type:` 综述/基准/数据集才贴。
    - `status:` 不用写，脚本默认补 `status:to-read`（用户说"先看"就 `status:to-read-first`）。
    - 词表外的新值不要私造：留空，汇报里写"建议新标签 xxx，理由"。

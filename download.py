@@ -28,7 +28,7 @@ CONNECTOR = "http://127.0.0.1:23119"
 LOG = os.path.join(HERE, "zotero-organize.log.md")
 UA_WEB = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 UA_LOCAL = "zotero-claude/1.0"            # 不能以 Mozilla/ 开头，否则 connector 当成浏览器请求拒掉
-COLLECTIONS = ("Evolution Algorithm", "Dex-Manipulation", "AI Foundation")
+COLLECTIONS = ("Evolution Algorithm", "Dex-Manipulation", "Humanoid", "AI Foundation")
 VOCAB = {  # 与 CLAUDE.md §3 一致；词表外的值只警告不拦（用户可能已批准新值）
  "method": {"vla", "policy-learning", "rl", "world-model", "foundation-model", "teleop", "grasp-synthesis"},
  "embod": {"dex-hand", "gripper", "single-arm", "bimanual", "humanoid"},
