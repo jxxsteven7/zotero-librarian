@@ -40,7 +40,7 @@ AI Learning / World Model / Humanoid 等已删），**不建新分类、不建�
 | 家族 | 值 | 规则 |
 |---|---|---|
 | `method:` | vla · policy-learning · rl · world-model · foundation-model · teleop · grasp-synthesis | 问题类型/学习范式，每篇 1–2 个。vla = 预训练视觉-语言-动作骨干；policy-learning = 无大 VLA 骨干的示教学习（BC/ACT/扩散/流策略）；rl 含对 VLA 的 RL 后训练（同时贴 vla+rl）；world-model = 用于规划/仿真/训练的学习动力学模型；foundation-model = 本身不是动作模型的 VLM/LLM/骨干；teleop = 遥操系统与人手→机器手重定向；grasp-synthesis = 抓取姿态合成 |
-| `embod:` | dex-hand · gripper · single-arm · dual-arm · bimanual · humanoid | 实验中的本体，任意个。末端（dex-hand/gripper）与臂数（single/dual）独立，通常各一个；**dual-arm 说硬件，bimanual 说任务**（双臂各干各的只贴 dual-arm）；多平台全贴；纯仿真按仿真本体贴 |
+| `embod:` | dex-hand · gripper · single-arm · bimanual · humanoid | 实验中的本体，任意个。末端（dex-hand/gripper）与臂数（single-arm/bimanual）独立，通常各一个；**bimanual = 实验里用了两条臂/两只手**，不再区分双臂协同还是各干各的（原 `dual-arm` 已于 2026-09-12 并入 bimanual）；无臂的双浮动手也贴 bimanual；多平台全贴；纯仿真按仿真本体贴。**humanoid = 策略部署在人形机器人整机上**（TienKung、Galaxea R1Pro、Unitree G1/H1、Fourier 之类，轮式人形也算），只用上肢也贴；两条臂装在固定躯干架上的"semi-humanoid"/ALOHA 不算，仿真里的 Humanoid 跑步环境不算。humanoid 只说硬件，分类看问题：在人形上做操作 → Dex-Manipulation；人形全身控制/运动 → AI Foundation |
 | `tech:` | action-chunking · flow-matching · diffusion · transformer · hil · latent-cot | 值得跨论文检索的机制，任意个。**只标论文贡献的实质组件，related work 里提到不算**；hil = 训练中的人类纠正/干预；latent-cot = 行动前的隐式或显式推理 |
 | `base:` | pi0 · pi0.5 · pi0.6 · gr00t | 真正微调/冻结的预训练骨干；从零训练或"架构类似"不贴 |
 | `modality:` | vision · language · tactile · depth · point-cloud · audio | **只标策略/模型真正消费的输入**，不默认贴 vision/language |
@@ -90,6 +90,8 @@ AI Learning / World Model / Humanoid 等已删），**不建新分类、不建�
    ### Proposed new tags   - <tag> | 理由 | 需要它的条目
    ```
 6. 不删条目、不删笔记、不删分类；删东西只在用户明说时做，做前把成员快照写进日志，并优先扔回收站而非永久删。
+7. 词表改名/合并标签：在 `proposal.py` 写 `RETAG = {"旧标签": "新标签"}`，`apply.py` 会对库里**所有**带旧标签的条目摘旧补新
+   （含 P 之外、`/download` 收的条目），日志记 `−tags:`。这是唯一会从条目上摘标签的路径。回收站里的条目自动跳过。
 
 **新论文入库走 `/download`**（项目级 skill `.claude/skills/download/SKILL.md`，会话要开在仓库目录；脚本 `download.py`）——这条是用户授权的端到端自动流程，
 不逐篇征求批准：`fetch <链接>`（arXiv / DOI / OpenReview / PDF 直链 / 本地 PDF / 项目页 → 元数据 + PDF + 全文 txt + 查重 + 建议标题）
@@ -101,6 +103,7 @@ AI Learning / World Model / Humanoid 等已删），**不建新分类、不建�
 - 仓库在 GitHub 私有库 `jxxsteven7/zotero-claude`，多台设备共用；新机器按 README 走一遍 `setup.sh`。
   `.env`、`library_dump*.json`、`inbox/` 不进 git。
 
+- 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual），远端 lib-version 3118。
 - 121 篇（用户自己把 `Z6QB6YQG` NSM-SFS 2023 扔进了回收站）全部贴齐标签、归入三分类、标题统一格式；arXiv 自动标签已清空；
   4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 测试时收了 π0（`HKWZ6MV2`）。
 - `KNFD9629`（HS2001）与 `GUHVP29Z` 是同一篇 Harmony Search 的重复条目，留给用户处理。

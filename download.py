@@ -31,7 +31,7 @@ UA_LOCAL = "zotero-claude/1.0"            # 不能以 Mozilla/ 开头，否则 c
 COLLECTIONS = ("Evolution Algorithm", "Dex-Manipulation", "AI Foundation")
 VOCAB = {  # 与 CLAUDE.md §3 一致；词表外的值只警告不拦（用户可能已批准新值）
  "method": {"vla", "policy-learning", "rl", "world-model", "foundation-model", "teleop", "grasp-synthesis"},
- "embod": {"dex-hand", "gripper", "single-arm", "dual-arm", "bimanual", "humanoid"},
+ "embod": {"dex-hand", "gripper", "single-arm", "bimanual", "humanoid"},
  "tech": {"action-chunking", "flow-matching", "diffusion", "transformer", "hil", "latent-cot"},
  "base": {"pi0", "pi0.5", "pi0.6", "gr00t"},
  "modality": {"vision", "language", "tactile", "depth", "point-cloud", "audio"},

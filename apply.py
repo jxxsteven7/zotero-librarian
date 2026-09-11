@@ -7,6 +7,7 @@
 
 凭据与路径：同目录 .env（见 config.py）。key 只读文件，不打印。
 规则：只增标签/分类、不删任何东西；自动标签(type=1)原样保留；只改 RENAMES 里的标题。
+唯一的例外是 RETAG（词表改名）：把旧标签整体换成新标签，会从条目上摘掉旧标签。
 """
 import argparse, datetime, json, os, re, sqlite3, sys, time, urllib.request, urllib.error, importlib.util
 
@@ -19,16 +20,27 @@ FAMILIES = ("method", "embod", "tech", "base", "modality")
 spec = importlib.util.spec_from_file_location("proposal", os.path.join(HERE, "proposal.py"))
 proposal = importlib.util.module_from_spec(spec); spec.loader.exec_module(proposal)
 P, RENAMES = proposal.P, proposal.RENAMES
+RETAG = getattr(proposal, "RETAG", {})   # 旧标签→新标签，作用于库里所有带旧标签的条目（不限于 P）
 ROOTS = ["Evolution Algorithm", "Dex-Manipulation", "AI Foundation"]   # Misc 于 2026-09-11 被用户改名为 AI Foundation
+
+
+def target_keys(con):
+    """要处理的条目：P 里的 + 库里带 RETAG 旧标签的（后者可能不在 P 里，比如 /download 收的）。"""
+    trashed = {k for (k,) in con.execute("select key from items where itemID in (select itemID from deletedItems)")}
+    keys = set(P) - trashed   # 回收站里的（如用户扔掉的 Z6QB6YQG）远端 GET /items 看不到，跳过
+    for old in RETAG:
+        keys |= {k for (k,) in con.execute("""select i.key from itemTags it join tags t on t.tagID=it.tagID
+            join items i on i.itemID=it.itemID where t.name=? and i.itemID not in (select itemID from deletedItems)""", (old,))}
+    return keys
 
 
 def local_state():
     """从本地库读：每个条目的 version / title / 现有 tags(含 type) / 现有 collection keys；分类名→key。"""
     con = sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True)
     colls = {name: key for key, name in con.execute("select key, collectionName from collections")}
-    items = {}
+    items = {}; keys = target_keys(con)
     for itemID, key, version in con.execute("select itemID, key, version from items"):
-        if key not in P: continue
+        if key not in keys: continue
         title = con.execute("""select v.value from itemData id join fields f on f.fieldID=id.fieldID
             join itemDataValues v on v.valueID=id.valueID where id.itemID=? and f.fieldName='title'""", (itemID,)).fetchone()
         tags = [{"tag": n, "type": t} if t else {"tag": n} for n, t in con.execute(
@@ -51,15 +63,24 @@ def build_updates(items, colls, only=None, rename=True, status=True):
     """返回 [(key, patch_obj, human_diff)]；无变化的条目不含在内。"""
     missing_roots = [r for r in ROOTS if r not in colls]
     updates = []
-    for key in P:
+    for key in sorted(items, key=lambda k: (k not in P, k)):
         if only and key not in only: continue
-        if key not in items: print(f"!! 本地库找不到 {key}，跳过", file=sys.stderr); continue
         cur = items[key]; patch = {"key": key, "version": cur["version"]}; diff = []
         have = {t["tag"] for t in cur["tags"]}
-        # status 不降级：已有 status:* 则不再加
-        want = [t for t in desired_tags(key, status and not any(t.startswith("status:") for t in have)) if t not in have]
-        if want:
-            patch["tags"] = cur["tags"] + [{"tag": t} for t in want]; diff.append("+tags: " + ", ".join(want))
+        # RETAG：摘掉旧标签，补上新标签（新标签已有就只摘）
+        old = [t for t in have if t in RETAG]
+        keep = [t for t in cur["tags"] if t["tag"] not in RETAG]
+        want = [RETAG[t] for t in sorted(old) if RETAG[t] not in have]
+        if key in P:
+            # status 不降级：已有 status:* 则不再加
+            want += [t for t in desired_tags(key, status and not any(t.startswith("status:") for t in have)) if t not in have and t not in want]
+        if want or old:
+            patch["tags"] = keep + [{"tag": t} for t in want]
+            if want: diff.append("+tags: " + ", ".join(want))
+            if old: diff.append("−tags: " + ", ".join(sorted(old)))
+        if key not in P:
+            if len(patch) > 2: updates.append((key, patch, diff))
+            continue
         want_c = [colls[n] for n in P[key][0] if n in colls and colls[n] not in cur["collections"]]
         need_c = [n for n in P[key][0] if n not in colls]
         if want_c:
@@ -106,7 +127,8 @@ def remote_versions(env):
 
 def remote_state(env):
     """从 Web API 拉提案涉及条目的当前 version / title / tags / collections（以远端为准构造载荷）。"""
-    keys = list(P); out = {}
+    con = sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True)
+    keys = sorted(target_keys(con)); out = {}
     for i in range(0, len(keys), 50):
         chunk = ",".join(keys[i:i + 50])
         st, _, js = req(env, "GET", "/items", params=f"?itemKey={chunk}&limit=50")
@@ -133,9 +155,10 @@ def main():
 
     if a.dry_run or not (a.plan or a.apply):
         print(f"[dry-run] 待建根分类: {missing_roots or '无'}；将更新 {len(updates)} 条（共 {len(P)} 条提案）")
-        n_tags = sum(len(p.get('tags', [])) - len(items[k]['tags']) for k, p, _ in updates if 'tags' in p)
+        n_tags = sum(len(d[7:].split(", ")) for _, _, ds in updates for d in ds if d.startswith("+tags: "))
+        n_rm = sum(1 for _, _, ds in updates if any(d.startswith("−tags") for d in ds))
         n_coll = sum(1 for _, p, _ in updates if 'collections' in p); n_title = sum(1 for _, p, _ in updates if 'title' in p)
-        print(f"  +tags {n_tags} 个, +collection {n_coll} 条, 改标题 {n_title} 条")
+        print(f"  +tags {n_tags} 个, 摘旧标签(RETAG) {n_rm} 条, +collection {n_coll} 条, 改标题 {n_title} 条")
         for k, p, d in updates[:8]: print("  ", k, "|", " | ".join(d))
         print("  …"); return
 
@@ -144,12 +167,12 @@ def main():
         sys.exit("缺 ZOTERO_API_KEY：请在仓库目录的 .env 写入 ZOTERO_API_KEY=...（不要贴进对话）")
     rnames, rdata = remote_collections(env)
     remote = remote_state(env)
-    absent = [k for k in P if k not in remote]
+    absent = [k for k in items if k not in remote]
     # 本地有未上传改动的条目 → 停，避免客户端下次同步时冲突
     con = sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True)
-    unsynced = [k for (k,) in con.execute("select key from items where synced=0") if k in P]
+    unsynced = [k for (k,) in con.execute("select key from items where synced=0") if k in items]
     # 远端与本地内容差异（只报告，不阻塞；载荷以远端为准）
-    content_drift = [k for k in P if k in remote and k in items and (
+    content_drift = [k for k in items if k in remote and (
         remote[k]["title"] != items[k]["title"] or {t["tag"] for t in remote[k]["tags"]} != {t["tag"] for t in items[k]["tags"]}
         or set(remote[k]["collections"]) != set(items[k]["collections"]))]
     print(f"远端分类: {sorted(rnames)}\n远端不存在: {absent}  本地未同步(synced=0): {unsynced}  远端/本地内容有差异: {content_drift}")
@@ -190,7 +213,7 @@ def main():
         if failed: print(json.dumps(failed, ensure_ascii=False, indent=1)); sys.exit(1)
     # Uncertain 段
     unc = [(k, P[k][7]) for k in P if "Uncertain" in P[k][7] or "请定" in P[k][7] or "存疑" in P[k][7] or "不确定" in P[k][7]]
-    log(["### Uncertain"] + [f"- {k} | {items[k]['title'][:50]} | {n}" for k, n in unc if k in items])
+    log(["### Uncertain"] + [f"- {k} | {items[k]['title'][:50]} | {n}" for k, n in unc if k in items and k in {u[0] for u in updates}])
     log(["### Proposed new tags"] + [f"- {t} | {w} | {it}" for t, w, it in proposal.NEW_TAGS])
     print("完成。日志:", LOG)
 
