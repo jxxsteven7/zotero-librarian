@@ -3,7 +3,7 @@
 python3 proposal.py  -> 生成 zotero-organize.proposal.md
 """
 import json, os
-rows = {r["key"]: r for r in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_dump.json")))}
+rows = {r["key"]: r for r in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_dump.json"), encoding="utf-8"))}
 
 DM, MISC, EA, HUM = "Dex-Manipulation", "AI Foundation", "Evolution Algorithm", "Humanoid"   # Misc 已改名 AI Foundation（分类 key 不变 DU25RH7B）；Humanoid 2026-09-12 新建
 
@@ -179,7 +179,7 @@ def md():
 
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
-    open(os.path.join(here, "zotero-organize.proposal.md"), "w").write(md())
+    open(os.path.join(here, "zotero-organize.proposal.md"), "w", encoding="utf-8").write(md())
     n_dm = sum(1 for v in P.values() if DM in v[0]); n_misc = sum(1 for v in P.values() if MISC in v[0]); n_ea = sum(1 for v in P.values() if EA in v[0])
     print(f"rows={len(P)} (lib={len(rows)}) | Dex-Manipulation={n_dm} Misc={n_misc} EA={n_ea} | renames={len(RENAMES)}")
     missing = set(rows) - set(P); extra = set(P) - set(rows)

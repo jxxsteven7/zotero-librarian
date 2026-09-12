@@ -26,7 +26,7 @@ from venues import abbr_from_name, venue_from_context, venue_from_pdf
 import apply as zapi                      # Web API 封装（req），只在 collect / --also 时用
 
 INBOX = os.path.join(HERE, "inbox"); DONE = os.path.join(INBOX, "done")
-from config import DB, STORAGE
+from config import DB_RO_URI, STORAGE, PDFTOTEXT, PDFTOTEXT_INSTALL
 CONNECTOR = "http://127.0.0.1:23119"
 LOG = os.path.join(HERE, "zotero-organize.log.md")
 UA_WEB = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -189,9 +189,28 @@ def download_pdf(url, dest):
     open(dest, "wb").write(b); return True, url
 
 
-def pdf_text(pdf, txt, first_pages=None):
-    cmd = ["pdftotext"] + (["-l", str(first_pages)] if first_pages else []) + [pdf, txt]
-    subprocess.run(cmd, check=False, capture_output=True); return open(txt, errors="replace").read() if os.path.exists(txt) else ""
+_PDF_WARNED = False
+def pdf_text(pdf, txt=None, first_pages=None):
+    """PDF → 文本（页间 \f 分隔，和 pdftotext 一样）。首选 pdftotext（config 里三平台查找），没有就退到 pypdf；都没有返回 ""。
+    txt 给了就同时写到那个文件（inbox/<slug>.txt，供 grep）。"""
+    global _PDF_WARNED
+    text = ""
+    if PDFTOTEXT:
+        cmd = [PDFTOTEXT] + (["-l", str(first_pages)] if first_pages else []) + [pdf, "-"]
+        try: text = subprocess.run(cmd, check=False, capture_output=True).stdout.decode("utf-8", "replace")   # pdftotext 输出 UTF-8，不能用 text=True（Windows 会按 GBK 解）
+        except OSError as e: print(f"  ⚠ pdftotext 跑不起来（{e}）")
+    if not text:
+        try:
+            import pypdf
+            r = pypdf.PdfReader(pdf)
+            text = "\f".join((pg.extract_text() or "") for pg in (r.pages[:first_pages] if first_pages else r.pages))
+        except ImportError:
+            if not PDFTOTEXT and not _PDF_WARNED:
+                _PDF_WARNED = True; print(f"  ⚠ 没有 pdftotext 也没有 pypdf，抽不了正文（首页出版声明 / 项目页链接 / 关键词 grep 都会缺）。装一个：{PDFTOTEXT_INSTALL}")
+        except Exception as e: print(f"  ⚠ pypdf 解析失败：{e}")
+    if txt and text:
+        with open(txt, "w", encoding="utf-8") as f: f.write(text)
+    return text
 
 
 MONTH_NUM = {m: i + 1 for i, m in enumerate("january february march april may june july august september october november december".split())}
@@ -229,10 +248,11 @@ def arxiv_by_title(title):
 
 
 def ids_from_pdf_text(text):
-    m = re.search(r"arXiv:" + ARXIV_ID + r"\s*\[", text[:4000])
+    head = text.split("\f")[0]                                            # 整个首页：pypdf 把 arXiv 侧边水印排在页末，不能只看前 4000 字
+    m = re.search(r"arXiv:" + ARXIV_ID + r"\s*\[", head)
     if m: return "arxiv", m.group(1)
-    m = re.search(r"\b(10\.\d{4,9}/[^\s\"<>]+)", text[:6000])
-    if m: return "doi", m.group(1).rstrip(".,;)")
+    m = re.search(r"\b(10\.\d{4,9}/[^\s\"<>]+)", head[:6000])
+    if m: return "doi", re.sub(r"\(0123456789.*$", "", m.group(1)).rstrip(".,;)")   # pypdf 会把 Springer 的隐形水印 (0123456789().,-volV) 粘到 DOI 后面
     lines = [l.strip() for l in text[:3000].splitlines() if len(l.strip()) > 15]     # 没有 arXiv 戳/DOI：拿前几行当标题去 arXiv 搜
     for i in range(min(3, len(lines))):
         for cand in (lines[i], " ".join(lines[i:i + 2])):
@@ -270,7 +290,7 @@ def find_duplicate(m):
     global _LIB
     if _LIB is None:
         subprocess.run([sys.executable, os.path.join(HERE, "dump_zotero.py")], capture_output=True)
-        _LIB = json.load(open(os.path.join(HERE, "library_dump.json")))
+        _LIB = json.load(open(os.path.join(HERE, "library_dump.json"), encoding="utf-8"))
     lib = _LIB
     aid = m["id"] if m["source"] == "arxiv" else (m.get("arxiv_id") or "")
     doi = (m["id"] if m["source"] == "crossref" else m.get("doi") or "").lower()
@@ -453,7 +473,7 @@ def fetch_one(link):
     if m["source"] == "arxiv": lookup_published(m, text if os.path.exists(pdf) else None)   # 预印本查中稿，查到就写会议
     m["proposed_title"] = make_title(m)
     dup = find_duplicate(m); m["duplicate"] = {"key": dup["key"], "title": dup["title"]} if dup else None
-    json.dump(m, open(os.path.join(INBOX, m["slug"] + ".json"), "w"), ensure_ascii=False, indent=1)
+    with open(os.path.join(INBOX, m["slug"] + ".json"), "w", encoding="utf-8") as f: json.dump(m, f, ensure_ascii=False, indent=1)
     return m
 
 
@@ -474,14 +494,14 @@ def card(m):
 
 # ---------- save ----------
 def local_collection_id(name):
-    c = sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True)
+    c = sqlite3.connect(DB_RO_URI, uri=True)
     r = c.execute("select collectionID from collections where libraryID=1 and collectionName=?", (name,)).fetchone()
     if not r: raise RuntimeError(f"本地没有分类 {name!r}（只允许 {COLLECTIONS}）")
     return r[0]
 
 
 def local_item_by_title(title):
-    c = sqlite3.connect(f"file:{DB}?mode=ro&immutable=1", uri=True)
+    c = sqlite3.connect(DB_RO_URI, uri=True)
     r = c.execute("""select i.itemID, i.key, i.dateAdded from items i join itemData d on d.itemID=i.itemID join fields f on f.fieldID=d.fieldID
                      join itemDataValues v on v.valueID=d.valueID where f.fieldName='title' and v.value=? and i.itemID not in (select itemID from deletedItems)
                      order by i.dateAdded desc limit 1""", (title,)).fetchone()
@@ -504,7 +524,7 @@ def check_tags(tags):
 def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, force=False):
     p = os.path.join(INBOX, slug + ".json")
     if not os.path.exists(p): raise RuntimeError(f"inbox 里没有 {slug}，先 fetch")
-    m = json.load(open(p))
+    m = json.load(open(p, encoding="utf-8"))
     if m.get("duplicate") and not force: raise RuntimeError(f"库里已有 {m['duplicate']['key']} | {m['duplicate']['title']}；确认要加就 --force")
     if collection not in COLLECTIONS or (also and also not in COLLECTIONS): raise RuntimeError(f"分类只能是 {COLLECTIONS}")
     tags = [t.strip() for t in tags if t.strip()]
@@ -535,7 +555,7 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     if also:
         try: extra = " | +collection(web api): " + also + " " + add_collection(got["key"], also)
         except Exception as e: extra = f" | ⚠ 第二分类 {also} 没加上（{e}），稍后 python3 download.py collect {got['key']} \"{also}\""
-    with open(LOG, "a") as f:
+    with open(LOG, "a", encoding="utf-8") as f:
         f.write(f"\n## {date.today()} — download\n- {got['key']} | {title} | +collection: {collection}{extra} | +tags: {', '.join(tags)} | pdf: {'ok' if pdf_ok else 'missing'} | src: {m.get('link')}\n")
     os.makedirs(DONE, exist_ok=True)
     for ext in (".json", ".txt"):
@@ -570,7 +590,7 @@ def recheck(write=False, only=None, dates=False, search=False):
     --search 对没有 arXiv 链接/水印的条目按标题去 arXiv 搜预印本（期刊/会议论文若有更早的预印本，日期用预印本 v1；每条 3 秒）。
     先跑 dump_zotero.py。默认只列表；--write 才经 Web API 改标题（approval mode：先给用户看表）。"""
     from config import DATA_DIR
-    items = json.load(open(os.path.join(HERE, "library_dump.json")))
+    items = json.load(open(os.path.join(HERE, "library_dump.json"), encoding="utf-8"))
     cands = []
     for it in items:
         if only and it["key"] not in only: continue
@@ -582,7 +602,7 @@ def recheck(write=False, only=None, dates=False, search=False):
         is_arxiv = "[arXiv]" in it["title"]
         text = ""
         if (is_arxiv or (dates and not aid)) and it.get("pdfs"):            # 首页文本：查出版声明；url 里没 arXiv 号的从首页水印认
-            text = subprocess.run(["pdftotext", "-l", "1", os.path.join(DATA_DIR, it["pdfs"][0]), "-"], capture_output=True, text=True).stdout
+            text = pdf_text(os.path.join(DATA_DIR, it["pdfs"][0]), first_pages=1)
             if not aid:
                 got = re.search(r"arXiv:" + ARXIV_ID, text); aid = got.group(1) if got else None
         if not aid and search and dates:                                  # 按标题搜 arXiv（用户短名如 "PPO" 搜不到，跳过）
@@ -638,7 +658,7 @@ def recheck(write=False, only=None, dates=False, search=False):
         print(f"  {'ok' if st in (200, 204) else '✗ ' + str(st)} {key} {old[:40]!r} -> {new[:60]!r}")
         if st in (200, 204): done.append((key, old, new, why))
     if done:
-        with open(LOG, "a") as f:
+        with open(LOG, "a", encoding="utf-8") as f:
             f.write(f"\n## {date.today()} — recheck（arXiv 条目标题复核）\n### Applied\n")
             for key, old, new, why in done: f.write(f"- {key} | {old[:60]} -> {new[:70]} | {why[:110]}\n")
 
@@ -652,10 +672,10 @@ def main(argv):
             try: card(fetch_one(link))
             except Exception as e: print(f"=== {link}\n  ✗ {e}\n")
     elif cmd == "show":
-        card(json.load(open(os.path.join(INBOX, args[0] + ".json"))))
+        card(json.load(open(os.path.join(INBOX, args[0] + ".json"), encoding="utf-8")))
     elif cmd == "list":
         for f in sorted(os.listdir(INBOX)) if os.path.isdir(INBOX) else []:
-            if f.endswith(".json"): m = json.load(open(os.path.join(INBOX, f))); print(f"{m['slug']:<28} {m['proposed_title'][:90]}")
+            if f.endswith(".json"): m = json.load(open(os.path.join(INBOX, f), encoding="utf-8")); print(f"{m['slug']:<28} {m['proposed_title'][:90]}")
     elif cmd == "save":
         import argparse
         ap = argparse.ArgumentParser(prog="download.py save"); ap.add_argument("slug")

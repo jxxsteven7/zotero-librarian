@@ -5,10 +5,15 @@
 
 ## 1. 库在哪、怎么读写
 
-- 数据目录 `~/Documents/Zotero/`，主库 `zotero.sqlite`，PDF 在 `storage/<附件key>/`。不改 PDF。
+- 数据目录由 `config.py` 决定：`.env` 的 `ZOTERO_DATA_DIR` > 本机 Zotero `prefs.js` 的 `extensions.zotero.dataDir`（三平台的 profile 位置都会找）> 平台默认
+  （`~/Zotero`，Windows `C:\Users\你\Zotero`）；这台 Ubuntu 工作站是 `~/Documents/Zotero`。主库 `zotero.sqlite`，PDF 在 `storage/<附件key>/`。不改 PDF。
 - **读**：`python3 dump_zotero.py` → `library_dump.json`（标题/作者/分类/标签/PDF 路径/笔记/批注；不进 git）。
-  sqlite 用 `file:...?mode=ro&immutable=1` 打开，Zotero 运行中也能读，不用拷贝。
-  本机路径和凭据都在 `.env`（`config.py` 读；`ZOTERO_DATA_DIR` 本机是 `~/Documents/Zotero`，别的机器看 prefs.js）。
+  sqlite 一律用 `config.DB_RO_URI` 打开（`Path.as_uri()` + `?mode=ro&immutable=1`，Windows 的 `file:///C:/…` 也对），Zotero 运行中也能读，不用拷贝。
+  凭据在 `.env`（`config.py` 读，每台机器各一份）。
+- **三平台通用**（Ubuntu / macOS / Windows，2026-09-12 起）：脚本只用标准库；平台差异全收在 `config.py`——数据目录探测、
+  `pdftotext` 查找（PATH → 当前 Python 所在 conda 环境 → Homebrew/winget/scoop/choco 常见位置 → `.env` 的 `PDFTOTEXT`），找不到退到 `pypdf`；
+  所有文件读写显式 UTF-8，stdout 强制 UTF-8（否则 Windows 管道下打 ✓⚠− 会崩）。**Windows 上命令是 `python` 不是 `python3`**（Claude Code 的 Bash 是 Git Bash，
+  grep/sed 都有）。新机器先 `./setup.sh`（= `python setup.py`）体检，缺什么打印对应平台的安装命令；仓库 `.gitattributes` 钉死 LF。
 - **写**：只走 Zotero Web API（库 ID 14568484），**绝不直接改 sqlite**——Zotero 常驻运行且开着同步。
   本地 API（23119）是只读的且没开；`zotero-skills` 插件底层也是同一个 Web API，没装、不需要。
   key 在 `.env`（600 权限，裸 key 一行），个人库已开写权限。**永远不要把 key 打印到对话或日志。** 缺 key 就停下来问。
@@ -88,7 +93,8 @@
   凡是文件名还是模板生成的附件就会跟着改名（2026-09-12 发现约 50 个 PDF 已经被改成 `作者 - 年 - [日期] [刊] 原名.pdf`）。
   解决：文件名模板（设置 → 通用 → 文件重命名 → 自定义）改成去掉前两个方括号：
   `{{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title replaceFrom="^\[[^\]]*\] *(\[[^\]]*\] *)?" replaceTo="" truncate="120" }}`
-  之后改标题文件名不再变；已经带前缀的用 Run JavaScript 一次性改回（只动文件名里有 ` - [` 的，不碰用户手工命名的 `NOA 2023.pdf` 之类）。
+  这是库的**同步设置**（`attachmentRenameTemplate`），用户 2026-09-12 已设好，其他设备的 Zotero 会自动跟上，不用每台再设。
+  之后改标题文件名不再变；已经带前缀的用 Run JavaScript 跑仓库里的 `fix_pdf_names.js` 一次性改回（只动文件名里有 ` - [` 的，不碰用户手工命名的 `NOA 2023.pdf` 之类）。
 - 缩写表在 `venues.py`，新缩写只加那里。存量 110 条已于 2026-09-11 批量改完（老→新对照在日志里），当时的 retitle 脚本和中间数据已删。
 
 ## 5. 工作流（approval mode）
@@ -117,8 +123,9 @@
 
 ## 6. 现状与遗留（2026-09-12）
 
-- 仓库在 GitHub 私有库 `jxxsteven7/zotero-claude`，多台设备共用；新机器按 README 走一遍 `setup.sh`。
-  `.env`、`library_dump*.json`、`inbox/` 不进 git。
+- 仓库在 GitHub 私有库 `jxxsteven7/zotero-claude`，Ubuntu / macOS / Windows 三台共用；新机器按 README 走一遍 `setup.sh`。
+  `.env`、`library_dump*.json`、`inbox/` 不进 git。Zotero 端每台机器要各做一次的只有关 `automaticTags`（客户端偏好，不同步）；
+  标签颜色和 PDF 文件名模板都是库的同步设置，已经设好。
 
 - 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual）；同日新建 `Humanoid` 分类，BFM-Zero 从 AI Foundation 移入，
   SPIDER 两个分类共享。`recheck` 查出 6 篇已中稿的 `[arXiv]` 改成 RSS/IROS/ICRA（证据是 DOI）；其余 29 篇 API 和项目页都查不到录用信息，保留。

@@ -13,6 +13,9 @@ description: |
 
 参数 `$ARGUMENTS` 是一个或多个链接 / 本地 PDF 路径，空格分隔。没给参数就问要哪几篇。
 
+三平台通用（Ubuntu / macOS / Windows）：下面的 `python3` 在 Windows 上写 `python`；`pdftotext` 没装时脚本自动退到 `pypdf`，
+两个都没有会打印 ⚠ 和安装命令——那就先让用户 `python setup.py` 体检再继续，别在没正文的情况下猜标签。
+
 ## 流程（每篇都走完，不要只做一半）
 
 1. **抓取**：`python3 download.py fetch <链接>...`（在仓库目录下）

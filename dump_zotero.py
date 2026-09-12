@@ -4,8 +4,8 @@
 """
 import sqlite3, os, json, sys, re
 
-from config import DB as SRC   # 数据目录来自 .env 的 ZOTERO_DATA_DIR
-con = sqlite3.connect(f"file:{SRC}?mode=ro&immutable=1", uri=True)
+from config import DB_RO_URI   # 数据目录来自 .env 的 ZOTERO_DATA_DIR（或 prefs.js 自动探测）；URI 三平台通用
+con = sqlite3.connect(DB_RO_URI, uri=True)
 q = lambda sql, *a: con.execute(sql, a).fetchall()
 strip = lambda h: re.sub(r"<[^>]+>", " ", h or "").strip()
 
@@ -38,7 +38,7 @@ for itemID, key, typeName, dateAdded in items:
         dateAdded=dateAdded[:10], url=f.get("url", ""), doi=f.get("DOI", ""), abstract=f.get("abstractNote", "")))
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_dump.json")
-json.dump(rows, open(out, "w"), ensure_ascii=False, indent=1)
+with open(out, "w", encoding="utf-8") as f: json.dump(rows, f, ensure_ascii=False, indent=1)
 print(f"{len(rows)} 篇 -> {out}", file=sys.stderr)
 
 if "--table" in sys.argv:

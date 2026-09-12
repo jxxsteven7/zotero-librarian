@@ -1,0 +1,8 @@
+# 三平台共用：仓库里一律 LF，Windows 上 autocrlf 也不许把 .sh / .py 换成 CRLF（bash 遇到 \r 会挂）
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.js text eol=lf
+*.pdf binary
+*.json text eol=lf
