@@ -25,7 +25,7 @@ sys.path.insert(0, HERE)
 from venues import abbr_from_name, venue_from_context, venue_from_pdf
 import apply as zapi                      # Web API 封装（req），只在 collect / --also 时用
 
-INBOX = os.path.join(HERE, "inbox"); DONE = os.path.join(INBOX, "done")
+INBOX = os.path.join(HERE, "inbox")                      # 下载暂存区，入库后清空；不进 git
 from config import connect_ro, STORAGE, PDFTOTEXT, PDFTOTEXT_INSTALL
 CONNECTOR = "http://127.0.0.1:23119"
 LOG = os.path.join(HERE, "zotero-organize.log.md")
@@ -606,10 +606,8 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
         except Exception as e: extra = f" | ⚠ 第二分类 {also} 没加上（{e}），稍后 python3 download.py collect {got['key']} \"{also}\""
     with open(LOG, "a", encoding="utf-8") as f:
         f.write(f"\n## {date.today()} — download\n- {got['key']} | {title} | +collection: {collection}{extra} | +tags: {', '.join(tags)} | pdf: {'ok' if pdf_ok else 'missing'} | src: {m.get('link')}\n")
-    os.makedirs(DONE, exist_ok=True)
-    for ext in (".json", ".txt"):
-        if os.path.exists(os.path.join(INBOX, slug + ext)): shutil.move(os.path.join(INBOX, slug + ext), os.path.join(DONE, slug + ext))
-    if os.path.exists(pdf): os.remove(pdf)                       # Zotero 已有自己的一份
+    for ext in (".json", ".txt", ".pdf"):                       # 入库后 inbox 里的三个文件都删：PDF Zotero 已存了自己的一份，json/txt 只在定标签时有用
+        if os.path.exists(os.path.join(INBOX, slug + ext)): os.remove(os.path.join(INBOX, slug + ext))
     print(extra.strip(" |") if extra else "")
     return got
 

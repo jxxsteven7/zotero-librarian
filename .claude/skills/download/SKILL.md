@@ -20,7 +20,7 @@ description: |
 
 1. **抓取**：`python3 download.py fetch <链接>...`（在仓库目录下）
    每篇打印一张卡片：来源、标题、作者、日期(来源)、刊/会(来源)、建议标题、PDF 是否拿到、全文 txt 路径、摘要，
-   以及是否与库里已有条目重复。inbox 文件在 `inbox/<slug>.{json,pdf,txt}`。
+   以及是否与库里已有条目重复。下载暂存在仓库的 `inbox/<slug>.{json,pdf,txt}`（不进 git）；`save` 入库后三个文件自动删掉——PDF 由 Zotero 自己存一份在数据目录 `storage/<附件key>/`。
    - 卡片报 `✗`：链接认不出或元数据取不到，告诉用户原因，让他换 arXiv/DOI 链接或直接给 PDF。
      （OpenReview 的 API 常被人机验证挡住，脚本会退到 PDF 路线；项目页靠页面上的 PDF 链接 + arXiv 标题搜索认出来。）
    - 报 `⚠ 重复`：**默认跳过**，汇报里说明库里已有哪条；用户明确说要再加才 `--force`。
