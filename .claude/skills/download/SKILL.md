@@ -44,7 +44,8 @@ description: |
    卡片里带 `⚠` 的来源（Crossref 不完整、OpenReview 日期、缩写表里没有的全名）要自己判断：
    全名刊物查 `venues.py` 没有缩写的，按用户习惯造一个缩写（首字母大写）并在汇报里标出来。日期拿不到精确的能到哪写哪，不编造。
 
-4. **入库**：`python3 download.py save <slug> --collection "<分类>" --tags a,b,c [--also "<分类>"] [--venue X] [--date YYYY-MMDD]`
+4. **入库**：`python3 download.py save <slug> --collection "<分类>" --tags a,b,c [--also "<分类>"] [--venue X] [--date YYYY-MMDD] [--url 项目页] [--short 短名]`
+   卡片里的"项目页"行是 URL 字段的默认值（没认出就用 arXiv 链接，候选里有像项目页的可 `--url` 指定）；"短名"是 Short Title 默认值（Notion 页面标题）。
    脚本经 Zotero 桌面端 connector 接口建条目、贴标签、送 PDF，然后从本地库读回 key/分类/标签/PDF 路径打印出来。
    报 "connector 23119 不通" 就是 Zotero 没开，让用户开了再说。`--also` 走 Web API，要等条目同步上去（最多 3 分钟）；
    没等到会打印一条 `download.py collect <key> <分类>` 让稍后补。

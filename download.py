@@ -4,7 +4,7 @@
   python3 download.py fetch <link>...       解析元数据、下载 PDF 到 inbox/、抽文本、查重、算标题；不动库
   python3 download.py show <slug>           重新打印某条的摘要卡片
   python3 download.py save <slug> --collection "Dex-Manipulation" --tags method:vla,embod:gripper[,...]
-                       [--also "AI Foundation"] [--venue CoRL] [--date 2025-0102] [--name "原名"] [--force]
+                       [--also "AI Foundation"] [--venue CoRL] [--date 2025-0102] [--name "原名"] [--url 项目页] [--short 短名] [--force]
                                             经 Zotero 桌面端 connector 接口入库：建条目 → 进分类+贴标签 → 送 PDF
   python3 download.py collect <itemKey> <collection>   事后经 Web API 追加第二个分类（save --also 同步没等到时用）
   python3 download.py list                  列出 inbox 里还没入库的
@@ -26,7 +26,7 @@ from venues import abbr_from_name, venue_from_context, venue_from_pdf
 import apply as zapi                      # Web API 封装（req），只在 collect / --also 时用
 
 INBOX = os.path.join(HERE, "inbox"); DONE = os.path.join(INBOX, "done")
-from config import DB_RO_URI, STORAGE, PDFTOTEXT, PDFTOTEXT_INSTALL
+from config import connect_ro, STORAGE, PDFTOTEXT, PDFTOTEXT_INSTALL
 CONNECTOR = "http://127.0.0.1:23119"
 LOG = os.path.join(HERE, "zotero-organize.log.md")
 UA_WEB = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -351,20 +351,51 @@ def crossref_by_title(title):
     return None, None
 
 
-URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
+URL_RE = re.compile(r"https?://[^\s<>\"')\]]+|(?<![\w/.])[\w.-]+\.github\.io(?:/[^\s<>\"')\]]*)?")   # 也认 PDF 里裸写的 xxx.github.io
 NOT_PROJECT_HOSTS = ("arxiv.org", "doi.org", "openreview.net", "semanticscholar.org", "youtube.com", "youtu.be", "creativecommons.org",
-                     "huggingface.co/papers", "orcid.org", "ieee.org", "acm.org", "overleaf.com")
+                     "huggingface.co/papers", "orcid.org", "ieee.org", "acm.org", "overleaf.com", "developer.nvidia.com", "wikipedia.org",
+                     "pytorch.org", "tensorflow.org", "python.org", "mujoco.org", "isaac-sim", "shadowrobot.com", "wonikrobotics.com",
+                     "unitree.com", "franka.de", "gelsight.com", "intelrealsense.com", "ufactory.cc", "robotis.com", "science.org", "springer.com",
+                     "sciencedirect.com", "nature.com", "roboticsproceedings.org", "proceedings.mlr.press", "neurips.cc", "openaccess.thecvf.com",
+                     "crossref.org", "crossmark", "dl.acm.org", "ieeexplore", "scholar.google", "researchgate.net", "linkedin.com", "twitter.com", "x.com/")
 
 
-def project_urls(m, text=None):
-    """论文的项目页 / 代码页候选：arXiv comment、摘要、PDF 首页里的链接（去掉 arXiv/DOI 这类），最多 3 个。"""
+def _project_score(u):
+    """排序：项目页（github.io / 机构博客）> 代码仓库 > 其他；文件直链垫底。"""
+    ul = u.lower(); s = 0
+    if re.search(r"github\.io|pages\.dev|netlify\.app|vercel\.app|sites\.google\.com/view/", ul): s += 5
+    if re.search(r"(physicalintelligence|pi\.website|research\.nvidia|deepmind|openai\.com/(?:index|research)|csail\.mit\.edu)", ul): s += 4
+    if re.search(r"github\.com/[^/]+/[^/]+/?$", ul): s += 2
+    if re.search(r"\.(pdf|mp4|png|jpg|zip)$", ul): s -= 5
+    return s
+
+
+def project_urls(m, text=None, pdf=None):
+    """论文的项目页 / 代码页候选：arXiv comment、摘要、PDF 首页正文里的链接，以及 PDF 里超链接注释的真实目标（/URI，
+    pdftotext 会把长链接截断，注释里是完整的）。去掉 arXiv/DOI/出版社/厂商站，按"像项目页"排序，最多 3 个。"""
     blob = " ".join(x for x in (m.get("comment"), m.get("abstract"), (text or "").split("\f")[0]) if x)
-    out = []
-    for u in URL_RE.findall(blob):
-        u = u.rstrip(".,;:)")
-        if any(h in u.lower() for h in NOT_PROJECT_HOSTS) or u in out: continue
-        out.append(u)
-    return out[:3]
+    ctx = {}                                                         # 链接前面 120 字有 "project page / website / videos and code" 之类 → 加分
+    cands = []
+    for g in URL_RE.finditer(blob):
+        u = g.group(0).rstrip(".,;:)"); cands.append(u)
+        if re.search(r"project (?:page|website|site)|website|webpage|videos?(?: and code)?|code and videos|homepage|available at", blob[max(0, g.start() - 120):g.start()], re.I):
+            ctx[u] = 3
+    if pdf and os.path.exists(pdf):
+        try:
+            raw = open(pdf, "rb").read(3_000_000)
+            cands += [x.decode("latin-1").rstrip(".,;:)") for x in re.findall(rb"/URI\s*\((https?://[^)]{6,200})\)", raw)]
+        except OSError: pass
+    out = {}
+    for u in cands:
+        full = u if u.startswith("http") else "https://" + u
+        if any(h in full.lower() for h in NOT_PROJECT_HOSTS) or full.rstrip("/") in out: continue
+        out[full.rstrip("/")] = (_project_score(full) + ctx.get(u, 0), full)
+    return [full for _, (sc, full) in sorted(out.items(), key=lambda kv: kv[1][0], reverse=True)][:3]
+
+
+def project_url_score(u, text=None):
+    """给 fetch 用：候选是否够格自动当 URL 字段（github.io 之类，或正文里点名 "project page/website" 的）。"""
+    return _project_score(u) > 0 or bool(text and re.search(r"(?:project (?:page|website|site)|website|webpage|videos?|homepage|available at)[\s\S]{0,120}" + re.escape(u.replace("https://", "").rstrip("/")), text.split("\f")[0], re.I))
 
 
 def venue_from_page(url):
@@ -405,6 +436,16 @@ def lookup_published(m, text=None, s2=None):
         if ab: m["venue"], m["venue_src"] = ab, "project page " + ev; return
         if ev: notes.append(ev)
     if notes: m["venue_src"] = "default（" + "；".join(notes) + "）"
+
+
+def short_title(name):
+    """Zotero 的 Short Title 字段 = 论文短名，Notero 拿它当 Notion 页面标题（CLAUDE.md §4）：用户昵称 [ALOHA/ACT] > 冒号前的名字 > 原名。"""
+    name = re.sub(r"^(\s*\[[^\]]*\]\s*){2}", "", name or "").strip()          # 去掉 [日期] [刊/会]
+    g = re.match(r"^\[([^\]]+)\]\s*", name)
+    if g: return g.group(1)
+    head = name.split(":")[0].strip()
+    if ":" in name and 2 <= len(head) <= 40: return head
+    return re.sub(r"\s*[✅❗]+$", "", name)
 
 
 def make_title(m, name=None, venue=None, date_=None):
@@ -471,7 +512,10 @@ def fetch_one(link):
             if got: m["date"], m["date_src"] = got
             m["item"]["date"] = m["date"]
     if m["source"] == "arxiv": lookup_published(m, text if os.path.exists(pdf) else None)   # 预印本查中稿，查到就写会议
+    m["project_urls"] = project_urls(m, text if os.path.exists(pdf) else None, pdf=pdf if os.path.exists(pdf) else None)
+    m["project_url"] = next((u for u in m["project_urls"] if project_url_score(u, text if os.path.exists(pdf) else None)), None)   # 像项目页的才自动当 URL；其余只列候选
     m["proposed_title"] = make_title(m)
+    m["short_title"] = short_title(m["title"])
     dup = find_duplicate(m); m["duplicate"] = {"key": dup["key"], "title": dup["title"]} if dup else None
     with open(os.path.join(INBOX, m["slug"] + ".json"), "w", encoding="utf-8") as f: json.dump(m, f, ensure_ascii=False, indent=1)
     return m
@@ -485,7 +529,9 @@ def card(m):
     print(f"  作者    : {a}")
     print(f"  日期    : {m.get('date') or '?'}  ← {m.get('date_src')}")
     print(f"  刊/会   : {m.get('venue')}  ← {m.get('venue_src')}" + (f"   (comment: {m['comment']})" if m.get("comment") else ""))
-    print(f"  建议标题: {m['proposed_title']}")
+    print(f"  建议标题: {m['proposed_title']}   短名: {m.get('short_title')}")
+    others = [u for u in (m.get("project_urls") or []) if u != m.get("project_url")]
+    print(f"  项目页  : {m.get('project_url') or '没认出（URL 字段将用 ' + (m.get('url') or '-') + '，可 --url 指定）'}" + (f"   候选: {others}" if others else ""))
     print(f"  PDF     : {'inbox/' + m['slug'] + '.pdf  ← ' + m['pdf_src'] if m.get('pdf_src') else '没拿到  ' + '; '.join(m.get('pdf_tried', []))}")
     print(f"  全文    : inbox/{m['slug']}.txt" if m.get("pdf_src") else "  全文    : 无（只能靠摘要）")
     if m.get("duplicate"): print(f"  ⚠ 重复  : 库里已有 {m['duplicate']['key']} | {m['duplicate']['title']}")
@@ -494,14 +540,14 @@ def card(m):
 
 # ---------- save ----------
 def local_collection_id(name):
-    c = sqlite3.connect(DB_RO_URI, uri=True)
+    c = connect_ro()
     r = c.execute("select collectionID from collections where libraryID=1 and collectionName=?", (name,)).fetchone()
     if not r: raise RuntimeError(f"本地没有分类 {name!r}（只允许 {COLLECTIONS}）")
     return r[0]
 
 
 def local_item_by_title(title):
-    c = sqlite3.connect(DB_RO_URI, uri=True)
+    c = connect_ro()
     r = c.execute("""select i.itemID, i.key, i.dateAdded from items i join itemData d on d.itemID=i.itemID join fields f on f.fieldID=d.fieldID
                      join itemDataValues v on v.valueID=d.valueID where f.fieldName='title' and v.value=? and i.itemID not in (select itemID from deletedItems)
                      order by i.dateAdded desc limit 1""", (title,)).fetchone()
@@ -513,15 +559,17 @@ def local_item_by_title(title):
     return dict(itemID=r[0], key=r[1], dateAdded=r[2], tags=tags, collections=colls, files=files)
 
 
+KEEP_BARE_TAGS = {"notion"}   # notion = Notero 插件自动打的，不算词表外（用户手打的 Dex-Hand 已于 2026-09-12 删除）
 def check_tags(tags):
     for t in tags:
+        if t in KEEP_BARE_TAGS: continue
         m = re.fullmatch(r"([a-z]+):([a-z0-9.\-]+)", t)
         if not m: print(f"  ⚠ 标签 {t!r} 不是 family:value 形式（照写，但请确认）"); continue
         if m.group(1) not in VOCAB: print(f"  ⚠ 标签家族 {m.group(1)!r} 不在词表")
         elif m.group(2) not in VOCAB[m.group(1)]: print(f"  ⚠ {t!r} 不在 CLAUDE.md 词表里（用户批准过才用）")
 
 
-def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, force=False):
+def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, force=False, url=None, short=None):
     p = os.path.join(INBOX, slug + ".json")
     if not os.path.exists(p): raise RuntimeError(f"inbox 里没有 {slug}，先 fetch")
     m = json.load(open(p, encoding="utf-8"))
@@ -531,7 +579,8 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     if not any(t.startswith("status:") for t in tags): tags.append("status:to-read")
     check_tags(tags)
     title = make_title(m, name=name, venue=venue, date_=date_)
-    item = dict(m["item"], id=slug, title=title)
+    item = dict(m["item"], id=slug, title=title, shortTitle=short or short_title(title))
+    item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL 字段 = 项目页优先（Notion 那边显示的就是它）
     pdf = os.path.join(INBOX, slug + ".pdf")
     if urllib.request.urlopen(urllib.request.Request(CONNECTOR + "/connector/ping", headers={"User-Agent": UA_LOCAL}), timeout=5).status != 200:
         raise RuntimeError("Zotero 桌面端没在跑（connector 23119 不通）")
@@ -681,8 +730,9 @@ def main(argv):
         ap = argparse.ArgumentParser(prog="download.py save"); ap.add_argument("slug")
         ap.add_argument("--collection", required=True); ap.add_argument("--tags", default=""); ap.add_argument("--also")
         ap.add_argument("--venue"); ap.add_argument("--date"); ap.add_argument("--name"); ap.add_argument("--force", action="store_true")
+        ap.add_argument("--url", help="URL 字段（默认项目页，没有就 arXiv/DOI 链接）"); ap.add_argument("--short", help="Short Title（默认冒号前的名字）")
         a = ap.parse_args(args)
-        save(a.slug, a.collection, a.tags.split(","), also=a.also, venue=a.venue, date_=a.date, name=a.name, force=a.force)
+        save(a.slug, a.collection, a.tags.split(","), also=a.also, venue=a.venue, date_=a.date, name=a.name, force=a.force, url=a.url, short=a.short)
     elif cmd == "collect":
         print(add_collection(args[0], args[1]))
     elif cmd == "recheck":

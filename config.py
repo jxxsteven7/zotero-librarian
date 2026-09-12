@@ -67,6 +67,27 @@ def sqlite_ro_uri(path):
     return Path(path).resolve().as_uri() + "?mode=ro&immutable=1"
 
 
+def connect_ro(path=None):
+    """只读打开 Zotero 库，Zotero 运行中也能用。
+    Zotero 10 起数据库是 WAL 模式（zotero.sqlite-wal），immutable 只读主文件会看到旧数据；而普通只读打开又被 Zotero 的
+    exclusive 锁挡住（database is locked）。所以有 WAL 时把主文件 + WAL 拷到临时目录再打开拷贝，SQLite 自己把 WAL 应用上去。
+    拷贝前后核对两个文件的 mtime/size 没变才算一致快照，变了就重拷。"""
+    import shutil, sqlite3, tempfile, atexit
+    path = path or DB
+    wal = path + "-wal"
+    if not (os.path.exists(wal) and os.path.getsize(wal) > 0):
+        return sqlite3.connect(sqlite_ro_uri(path), uri=True)
+    d = tempfile.mkdtemp(prefix="zotero-ro-"); atexit.register(shutil.rmtree, d, True)
+    for _ in range(5):
+        st = lambda: tuple((os.stat(f).st_mtime_ns, os.stat(f).st_size) for f in (path, wal))
+        before = st()
+        shutil.copyfile(path, os.path.join(d, "zotero.sqlite")); shutil.copyfile(wal, os.path.join(d, "zotero.sqlite-wal"))
+        if st() == before: break
+    con = sqlite3.connect(os.path.join(d, "zotero.sqlite"))
+    con.execute("pragma quick_check").fetchone()
+    return con
+
+
 # ---------- pdftotext ----------
 def find_pdftotext(explicit=None):
     """返回 pdftotext 可执行文件路径；找不到返回 None（download.py 会退到 pypdf）。"""
@@ -100,7 +121,6 @@ PDFTOTEXT_INSTALL = ("Ubuntu: sudo apt install poppler-utils   macOS: brew insta
 _env = load_env()
 DATA_DIR = os.path.expanduser(_env.get("ZOTERO_DATA_DIR") or data_dir_from_prefs() or default_data_dir())
 DB = os.path.join(DATA_DIR, "zotero.sqlite")
-DB_RO_URI = sqlite_ro_uri(DB)
 STORAGE = os.path.join(DATA_DIR, "storage")
 LIBRARY_ID = _env["ZOTERO_LIBRARY_ID"]
 PDFTOTEXT = find_pdftotext(_env.get("PDFTOTEXT"))

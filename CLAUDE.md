@@ -8,7 +8,9 @@
 - 数据目录由 `config.py` 决定：`.env` 的 `ZOTERO_DATA_DIR` > 本机 Zotero `prefs.js` 的 `extensions.zotero.dataDir`（三平台的 profile 位置都会找）> 平台默认
   （`~/Zotero`，Windows `C:\Users\你\Zotero`）；这台 Ubuntu 工作站是 `~/Documents/Zotero`。主库 `zotero.sqlite`，PDF 在 `storage/<附件key>/`。不改 PDF。
 - **读**：`python3 dump_zotero.py` → `library_dump.json`（标题/作者/分类/标签/PDF 路径/笔记/批注；不进 git）。
-  sqlite 一律用 `config.DB_RO_URI` 打开（`Path.as_uri()` + `?mode=ro&immutable=1`，Windows 的 `file:///C:/…` 也对），Zotero 运行中也能读，不用拷贝。
+  sqlite 一律用 `config.connect_ro()` 打开：**Zotero 10 起数据库是 WAL 模式**（`zotero.sqlite-wal`），老办法 `?mode=ro&immutable=1` 只读主文件、
+  看到的是几小时前的旧数据（2026-09-12 踩过：远端 3287 本地一直读出 3270），普通只读又被 Zotero 的 exclusive 锁挡住；`connect_ro()` 把主文件 + WAL
+  拷到临时目录再打开，Zotero 运行中也能拿到最新状态。别再自己写 `sqlite3.connect(...)`。
   凭据在 `.env`（`config.py` 读，每台机器各一份）。
 - **三平台通用**（Ubuntu / macOS / Windows，2026-09-12 起）：脚本只用标准库；平台差异全收在 `config.py`——数据目录探测、
   `pdftotext` 查找（PATH → 当前 Python 所在 conda 环境 → Homebrew/winget/scoop/choco 常见位置 → `.env` 的 `PDFTOTEXT`），找不到退到 `pypdf`；
@@ -60,7 +62,10 @@
   只出现在 Dex-Manipulation / Humanoid / AI Foundation 的条目上，Evolution Algorithm 的条目只有 `status:`（不需要硬贴）。
   标签选择器默认只显示当前分类里条目带的标签，要看全部得勾 "Display All Tags in This Library"。
 - 需要词表外的新标签：写进提案的"Proposed new tags"，用户批准后再用，不私造；不用无前缀的裸标签。
-- **arXiv 自动标签一律删除**（用户要求），手动打的无前缀标签（如 `Dex-Hand`）保留。不改用户已有标签名。
+- **arXiv 自动标签一律删除**（用户要求）。不改用户已有标签名。除 `notion` 外不再有裸标签（用户手打的 `Dex-Hand` 已于 2026-09-12 按其要求删除）。
+- `notion` 是 **Notero 插件**自动打的裸标签（2026-09-12 起，Dex-Manipulation / Humanoid / AI Foundation 三个分类的条目都有），保留、不算词表外；
+  同一批条目下各有一个标题为 `Notion` 的链接附件（linkMode 3，指向该条的 Notion 页面），是 Notero 定位页面的键，**不要删**。Notero 只单向推 Zotero → Notion，
+  我经 Web API 改的东西同步下来后也会自动推过去。配置和日常规则在 `notero.md`。
 
 彩色标签（库设置 `tagColors`，选中条目按数字键切换，`to-read` 不着色）：
 
@@ -89,6 +94,11 @@
   `download.py recheck [--dates]` 给存量 `[arXiv]` 补查（`--dates` 同时核对日期是不是 v1）。DBLP 和 OpenReview 都有人机验证，脚本用不了。
   查不到就保留 `[arXiv]`，不凭印象填会议。
 - 用户自己写的部分（短名 `GWO 2014`、昵称 `[VAE]` `[ALOHA/ACT]`、标记 ✅❗、`[ICRA-Best]`）**原样保留在两个括号之后，绝不改**。
+- **Short Title 字段 = 论文短名**（2026-09-12 起，Notero 拿它当 Notion 页面标题）：用户昵称 `[ALOHA/ACT]` → `ALOHA/ACT` > 冒号前的名字（`RL-100`）>
+  去掉前缀的原名。`download.short_title()` 算，`/download` 入库自动填（`--short` 覆盖）；改标题时 Short Title 不用跟着动（它本来就不含前缀）。
+- **URL 字段 = 项目页**（github.io / 机构博客 / sites.google.com/view），没有项目页才放 arXiv abs 或 DOI 链接（Notion 的 `URL` 列显示的就是它）。
+  `fetch` 从 arXiv comment、摘要、PDF 首页正文和 PDF 超链接注释（`/URI`）里找，卡片打印"项目页"，`save` 默认用它（`--url` 覆盖）。
+  arXiv 号不靠 URL：查重和 `recheck` 认 DOI 字段 `10.48550/arXiv.…` 和 PDF 水印。存量 74 篇（三个分类）已于 2026-09-12 改完，Evolution Algorithm 的没动。
 - **标题前缀只是显示用，PDF 文件名不要带**。Zotero 7+ 默认 `autoRenameFiles.onMetadataChange=true`：父条目标题一改，
   凡是文件名还是模板生成的附件就会跟着改名（2026-09-12 发现约 50 个 PDF 已经被改成 `作者 - 年 - [日期] [刊] 原名.pdf`）。
   解决：文件名模板（设置 → 通用 → 文件重命名 → 自定义）改成去掉前两个方括号：
@@ -138,4 +148,6 @@
 - 121 篇（用户自己把 `Z6QB6YQG` NSM-SFS 2023 扔进了回收站）全部贴齐标签、归入分类、标题统一格式；arXiv 自动标签已清空；
   4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 测试时收了 π0（`HKWZ6MV2`）。
 - `KNFD9629`（HS2001）与 `GUHVP29Z` 是同一篇 Harmony Search 的重复条目，留给用户处理。
+- 2026-09-12 本机 Zotero 升到 10.0.2（数据库 userdata 125→129，旧程序和备份已按用户要求删除）；Notion 侧改用 Notero 2.1.0 单向镜像三个分类，
+  现行配置见 `notero.md`（74 篇已推到 Notion `All Papers`，URL 改项目页 63 条、Short Title 补 33 条，日志有）。
 - `extensions.zotero.automaticTags` 还没关（需用户在 Zotero 设置里操作，或退出 Zotero 后由我改 prefs.js）。

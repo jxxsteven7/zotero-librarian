@@ -48,7 +48,7 @@ if os.path.isfile(config.DB):
     report(True, f"Zotero 库 {config.DB}（{src}）")
     try:
         import sqlite3
-        con = sqlite3.connect(config.DB_RO_URI, uri=True)
+        con = config.connect_ro()
         n = con.execute("select count(*) from items where itemID not in (select itemID from deletedItems)").fetchone()[0]
         report(True, f"只读打开成功（{n} 条 items，Zotero 开着也能读）")
     except Exception as e:

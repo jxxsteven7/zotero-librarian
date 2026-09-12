@@ -12,7 +12,7 @@
 import argparse, datetime, json, os, re, sqlite3, sys, time, urllib.request, urllib.error, importlib.util
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-from config import DB_RO_URI, load_env
+from config import connect_ro, load_env
 LOG = os.path.join(HERE, "zotero-organize.log.md")
 API = "https://api.zotero.org"
 FAMILIES = ("method", "embod", "tech", "base", "modality")
@@ -38,7 +38,7 @@ def target_keys(con):
 
 def local_state():
     """从本地库读：每个条目的 version / title / 现有 tags(含 type) / 现有 collection keys；分类名→key。"""
-    con = sqlite3.connect(DB_RO_URI, uri=True)
+    con = connect_ro()
     colls = {name: key for key, name in con.execute("select key, collectionName from collections")}
     items = {}; keys = target_keys(con)
     for itemID, key, version in con.execute("select itemID, key, version from items"):
@@ -131,7 +131,7 @@ def remote_versions(env):
 
 def remote_state(env):
     """从 Web API 拉提案涉及条目的当前 version / title / tags / collections（以远端为准构造载荷）。"""
-    con = sqlite3.connect(DB_RO_URI, uri=True)
+    con = connect_ro()
     keys = sorted(target_keys(con)); out = {}
     for i in range(0, len(keys), 50):
         chunk = ",".join(keys[i:i + 50])
@@ -173,7 +173,7 @@ def main():
     remote = remote_state(env)
     absent = [k for k in items if k not in remote]
     # 本地有未上传改动的条目 → 停，避免客户端下次同步时冲突
-    con = sqlite3.connect(DB_RO_URI, uri=True)
+    con = connect_ro()
     unsynced = [k for (k,) in con.execute("select key from items where synced=0") if k in items]
     # 远端与本地内容差异（只报告，不阻塞；载荷以远端为准）
     content_drift = [k for k in items if k in remote and (

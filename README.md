@@ -30,7 +30,7 @@ Zotero 端要在**每台机器**各做一次的只有一件事：设置里关 `a
 
 ## 日常
 
-- `/download <arXiv/DOI/PDF 链接或本地 PDF 路径>...` —— 收论文：下载、建条目、按规则命名、归类、贴标签，status 默认 `to-read`。
+- `/download <arXiv/DOI/PDF 链接或本地 PDF 路径>...` —— 收论文：下载、建条目、按规则命名、归类、贴标签，status 默认 `to-read`；URL 填项目页、Short Title 填短名，Notero 随即推到 Notion。
   需要 Zotero 桌面端开着（PDF 走它的本地 connector 接口，因为附件同步是 WebDAV）。
 - `python3 download.py recheck [--dates] [--search]` —— 复核库里 arXiv 条目：查中稿改 `[arXiv]` 为会议、核对日期是否 v1；看表批准后加 `--write`。
 - 存量批量整理（approval mode）：`dump_zotero.py` → 在 `proposal.py` 加行 → `apply.py --dry-run` / `--plan` → 批准后 `--apply`。
@@ -49,4 +49,5 @@ Zotero 端要在**每台机器**各做一次的只有一件事：设置里关 `a
 | `config.py` | 读 `.env`；探测 Zotero 数据目录和 pdftotext；三平台差异都收在这里 |
 | `setup.py` / `setup.sh` | 新机器体检 |
 | `fix_pdf_names.js` | Zotero Run JavaScript：把带前缀的 PDF 文件名改回模板格式 |
+| `notero.md` | Zotero → Notion 镜像（Notero 插件）的现行配置和日常规则 |
 | `zotero-organize.log.md` | 所有写入的审计日志 |

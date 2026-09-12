@@ -4,8 +4,8 @@
 """
 import sqlite3, os, json, sys, re
 
-from config import DB_RO_URI   # 数据目录来自 .env 的 ZOTERO_DATA_DIR（或 prefs.js 自动探测）；URI 三平台通用
-con = sqlite3.connect(DB_RO_URI, uri=True)
+from config import connect_ro   # 数据目录来自 .env 的 ZOTERO_DATA_DIR（或 prefs.js 自动探测）；Zotero 10 的 WAL 也处理了
+con = connect_ro()
 q = lambda sql, *a: con.execute(sql, a).fetchall()
 strip = lambda h: re.sub(r"<[^>]+>", " ", h or "").strip()
 
