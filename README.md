@@ -88,10 +88,15 @@ author's library of 129 reviewed papers:
 | classifier | collection accuracy | tag precision | tag recall |
 |---|---|---|---|
 | rules only | 127 / 129 | 0.89 | 0.74 |
-| rules + local LLM (qwen3.5:9b, default policy) | 127 / 129 | 0.87 | 0.80 |
+| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 127 / 129 | 0.87 | 0.80 |
+| rules + local LLM adjudicating (qwen3.5:27b) | 127 / 129 | 0.88 | 0.80 |
+| qwen3.5:9b alone (no rules) | 116 / 129 | 0.64 | 0.77 |
+| qwen3.5:27b alone (no rules) | 121 / 129 | 0.81 | 0.83 |
 
 Three quarters of the tags the rules miss appear as candidates in the report, so the human sees them anyway.
-These numbers are in-sample (the thresholds were tuned on the same items); expect somewhat lower on new papers.
+A 3x larger model is much better on its own but adds nothing in the adjudicator role — the rules already supply the
+discipline it lacks — so the default stays with the small, fast one. These numbers are in-sample (the thresholds were
+tuned on the same items); expect somewhat lower on new papers.
 
 ## Local LLM
 
