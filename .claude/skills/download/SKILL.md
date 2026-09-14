@@ -33,6 +33,9 @@ description: |
    - `method:` 1–2 个；`embod:` `tech:` `base:` `modality:` 只标真正用到的，判不出留空；`type:` 综述/基准/数据集才贴。
    - `status:` 不用写，脚本默认补 `status:to-read`（用户说"先看"就 `status:to-read-first`）。
    - 词表外的新值不要私造：留空，汇报里写"建议新标签 xxx，理由"。
+   - **觉得这篇值得贴更多标签时（method / embod / tech / base / modality 里词表已有、但按规则又够不上"实质用到"的边缘情况），
+     先按规则贴，再在汇报里把候选标签和理由列出来和用户讨论**（例：策略吃 LiDAR 高度图，可否贴 `modality:point-cloud`）；
+     用户同意后 `python3 download.py tag <key> tag1,tag2` 经 Web API 补上（只增不减，日志自动记）。不要一边不确定一边先贴上。
 
 3. **核对标题前缀**：日期取 arXiv v1 提交日或期刊在线发表日，`YYYY-MMDD`；刊/会用缩写。
    **用户下的是 arXiv 版但多半已中稿，标题要写会议/期刊，不写 `[arXiv]`；日期永远是 v1 提交日，中稿了也不动。**

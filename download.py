@@ -7,6 +7,7 @@
                        [--also "AI Foundation"] [--venue CoRL] [--date 2025-0102] [--name "原名"] [--url 项目页] [--short 短名] [--force]
                                             经 Zotero 桌面端 connector 接口入库：建条目 → 进分类+贴标签 → 送 PDF
   python3 download.py collect <itemKey> <collection>   事后经 Web API 追加第二个分类（save --also 同步没等到时用）
+  python3 download.py tag <itemKey> tag1,tag2          事后经 Web API 补标签（只增不减；和用户讨论后追加边缘标签用）
   python3 download.py list                  列出 inbox 里还没入库的
   python3 download.py recheck [--dates] [--search] [--write] [--only K1,K2]
                                             复核库里的 arXiv 条目：[arXiv] 标题查中稿（arXiv comment / PDF 首页声明 / Semantic Scholar /
@@ -664,6 +665,24 @@ def add_collection(key, name, wait=180):
     return "ok"
 
 
+def add_tags(key, tags):
+    """经 Web API 给条目补标签（超集写法：远端现有 + 新增，绝不摘）；和用户讨论后追加边缘标签用。日志自动记。"""
+    tags = [t.strip() for t in tags if t.strip()]
+    check_tags(tags)
+    env = zapi.load_env()
+    st, h, it = zapi.req(env, "GET", f"/items/{key}")
+    if st != 200: raise RuntimeError(f"远端没有条目 {key}（{st}）——刚入库的要等客户端同步上去")
+    cur = [t["tag"] for t in it["data"]["tags"]]
+    new = [t for t in tags if t not in cur]
+    if not new: return "(已有)"
+    payload = it["data"]["tags"] + [{"tag": t, "type": 0} for t in new]      # type 0 = 手动标签
+    st, h, body = zapi.req(env, "PATCH", f"/items/{key}", {"tags": payload, "version": it["version"]})   # 乐观锁
+    if st not in (200, 204): raise RuntimeError(f"PATCH {st}: {body}")
+    with open(LOG, "a", encoding="utf-8") as f:
+        f.write(f"\n## {date.today()} — tag（讨论后补标签）\n- {key} | {it['data']['title']} | +tags: {', '.join(new)}\n")
+    return "ok +" + ", ".join(new)
+
+
 # ---------- recheck：库里的 arXiv 条目复核标题 ----------
 def recheck(write=False, only=None, dates=False, search=False):
     """[arXiv] 标题查中稿（arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref → 项目页）；--dates 再核对日期是否 v1 提交日；
@@ -766,6 +785,8 @@ def main(argv):
         save(a.slug, a.collection, a.tags.split(","), also=a.also, venue=a.venue, date_=a.date, name=a.name, force=a.force, url=a.url, short=a.short)
     elif cmd == "collect":
         print(add_collection(args[0], args[1]))
+    elif cmd == "tag":
+        print(add_tags(args[0], args[1].split(",")))
     elif cmd == "recheck":
         only = None
         if "--only" in args: only = set(args[args.index("--only") + 1].split(","))
