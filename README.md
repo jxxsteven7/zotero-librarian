@@ -1,11 +1,14 @@
 # zotero-claude
 
-Keep a Zotero library organized with [Claude Code](https://claude.com/claude-code) — without spending tokens on the organizing.
+Keep a Zotero library organized from your coding agent — [Claude Code](https://claude.com/claude-code),
+[Codex](https://developers.openai.com/codex), [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) — without
+spending tokens on the organizing.
 
 Give it a link. It fetches the metadata and PDF, checks for duplicates, finds the published venue and the project page,
 files the paper into the right collection, tags it from a controlled vocabulary **with the evidence for every tag**,
 saves it through your running Zotero, waits for the cloud sync, writes an audit log, and reports. Rules live in a
-config file; a local model (Ollama) does the borderline calls; the agent only reads the report.
+config file; a local model (Ollama) — or, if you have no GPU to spare, the agent itself — makes the borderline calls;
+the agent otherwise only reads the report.
 
 ```
 $ python3 zc.py add https://arxiv.org/abs/2607.11481
@@ -34,6 +37,17 @@ saved U3HFYV4Q | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation
 | `U3HFYV4Q` | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation | Dex-Manipulation | method:teleop, method:rl, embod:dex-hand, embod:single-arm, status:to-read | yes | sync ok. candidates: `modality:vision` (...), `method:policy-learning` (...) |
 ```
 
+## Why this exists — and why you still read the papers
+
+Reading papers is how understanding is built, and nobody can do that for you; a summary written by a model is someone
+else's reading. This tool deliberately stops before that point. It does the part of the work that carries no insight
+but eats the afternoon — finding the PDF, checking whether you already have it, working out where it was published,
+naming the file, deciding which folder and which tags, keeping the library consistent across machines — so that a paper
+goes from "saw the link" to "sitting in the right place with the right tags, ready to read" in one command. The tags are
+a reading aid, not a substitute: every one comes with the sentence that justified it, and the borderline ones are
+left for you to decide. Then you open the PDF and read it yourself, and the library you end up with is one you actually
+know. `discover` and `cite` serve the same purpose upstream: they shorten the search for what to read next, not the reading.
+
 ## What it does
 
 | Command | |
@@ -47,8 +61,9 @@ saved U3HFYV4Q | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation
 | `zc.py apply` | Approval-mode batch changes (vocabulary renames, corrections across many items). |
 | `zc.py setup` | New-machine health check with the fix for every missing piece. |
 
-The Claude Code skills `/download`, `/tidy`, `/discover`, `/cite` are thin wrappers that run these commands and relay
-the report — the agent never reads PDFs or greps for hardware names itself.
+The skills `download`, `tidy`, `discover`, `cite` are thin wrappers that run these commands and relay the report — the
+agent never reads PDFs or greps for hardware names itself. Saving tokens is the design rule: anything a script or a
+local model can decide is decided there.
 
 ### Conventions it enforces
 
@@ -64,6 +79,20 @@ the report — the agent never reads PDFs or greps for hardware names itself.
 - **PDFs are saved by Zotero itself** through the desktop connector endpoint, so they sync like any other attachment
   (including WebDAV setups, where Web-API uploads never reach the clients).
 - **Everything is logged** (`logs/zotero-organize.log.md`), and nothing is ever deleted by the scripts.
+
+## Works with Claude Code, Codex, Kimi Code CLI
+
+The agent-facing part is two plain-text things every current coding agent understands: `AGENTS.md` (the rules) and
+skills in the [Agent Skills](https://agentskills.io) format under `.agents/skills/`.
+
+| Agent | reads | run a skill | notes |
+|---|---|---|---|
+| Claude Code | `CLAUDE.md` (imports `AGENTS.md`), `.claude/skills/` | `/download <link>` | `.claude/skills` is a verbatim copy of `.agents/skills`; `zc.py setup` checks they match, `--sync-skills` copies |
+| Codex CLI | `AGENTS.md`, `.agents/skills/` | `$download <link>` | the sandbox blocks network by default — allow it (`network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`) or approve the command |
+| Kimi Code CLI | `AGENTS.md`, `.agents/skills/` (and `.claude/skills/`) | `/skill:download <link>` | |
+| anything else that reads `AGENTS.md` | | tell it to follow `.agents/skills/download/SKILL.md` | the skill files are ordinary Markdown |
+
+The skills never depend on agent-specific features; each one is "run this command, relay the table, handle PAUSE rows".
 
 ## The taxonomy is yours
 
@@ -87,9 +116,10 @@ author's library of 129 reviewed papers:
 
 | classifier | collection accuracy | tag precision | tag recall |
 |---|---|---|---|
-| rules only | 127 / 129 | 0.89 | 0.74 |
-| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 127 / 129 | 0.87 | 0.80 |
+| rules only | 127 / 129 | 0.89 | 0.75 |
+| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 127 / 129 | 0.87 | 0.81 |
 | rules + local LLM adjudicating (qwen3.5:27b) | 127 / 129 | 0.88 | 0.80 |
+| rules + a perfect adjudicator (ceiling for `ZC_LLM=agent`) | 127 / 129 | 0.91 | 0.82 |
 | qwen3.5:9b alone (no rules) | 116 / 129 | 0.64 | 0.77 |
 | qwen3.5:27b alone (no rules) | 121 / 129 | 0.81 | 0.83 |
 
@@ -98,31 +128,39 @@ A 3x larger model is much better on its own but adds nothing in the adjudicator 
 discipline it lacks — so the default stays with the small, fast one. These numbers are in-sample (the thresholds were
 tuned on the same items); expect somewhat lower on new papers.
 
-## Local LLM
+## Who adjudicates: a local model, the agent, or nobody
 
 Classification is rules first: the rule engine turns the paper's title, abstract and full text into evidence snippets
-per tag. If a local model is configured, it reads the taxonomy definitions plus that evidence and adjudicates the
-borderline tags. Measured on the library above, letting a 9B model *decide* everything was worse than the rules
-(0.75 precision); letting it adjudicate only `embod`, `tech` and `base` gained recall at almost no cost — that is the
-default (`[llm].adjudicate_families` in `taxonomy.toml`). The model never overrides a rule-assigned tag or the
-collection; disagreements are printed.
+per tag and assigns what clears the thresholds. What is left are *candidates* — tags with some evidence but not enough.
+An adjudicator reads the taxonomy definitions plus that evidence and decides them. Measured on the library above,
+letting a 9B model *decide* everything was worse than the rules (0.75 precision); letting it adjudicate only `embod`,
+`tech` and `base` gained recall at almost no cost — that is the default (`[llm].adjudicate_families` in
+`taxonomy.toml`). The adjudicator never overrides a rule-assigned tag or the collection; disagreements are printed.
 
-Configuration in `.env`:
+`ZC_LLM` in `.env` picks the adjudicator:
 
 ```
-ZC_LLM=ollama                      # ollama | openai | off
+ZC_LLM=ollama                      # ollama | openai | agent | off
 ZC_LLM_MODEL=qwen3.5:9b            # any model you have pulled; bigger is better, 9B runs in ~2 s per paper on a desktop GPU
 ZC_LLM_URL=http://127.0.0.1:11434  # Ollama default; for openai: the base URL of any OpenAI-compatible server
 ZC_LLM_KEY=                        # openai only (hosted APIs)
 ```
 
-- **Ollama** (default): install from [ollama.com](https://ollama.com), `ollama pull qwen3.5:9b` (or any instruct model),
-  done. Structured JSON output and `think: false` are requested, so reasoning models don't spend time thinking.
+- **Ollama** (default, free): install from [ollama.com](https://ollama.com), `ollama pull qwen3.5:9b` (or any instruct
+  model; ~6 GB of RAM or VRAM), done. Structured JSON output and `think: false` are requested, so reasoning models don't
+  spend time thinking.
 - **OpenAI-compatible** (`ZC_LLM=openai`): LM Studio, vLLM, llama.cpp server, or a hosted API with a key.
-- **Off** (`ZC_LLM=off`): rules only. Also the automatic fallback when the server is unreachable (the report says so).
+- **The agent** (`ZC_LLM=agent`): no local model — for a laptop without a GPU or spare RAM. The script prints an
+  `ADJUDICATE` block (each candidate with its definition, the evidence sentences and the experimental-setup excerpt,
+  ~1.3 KB) and pauses; the agent answers on the printed command with `--confirm tag1,tag2` or `--confirm none`, and the
+  answer goes through the same merge as a model's. Only candidates a model could promote are asked about, so on the
+  library above 51 of 129 papers would ask, ~350 tokens each; the other 78 cost nothing. This is the one place the
+  agent spends tokens on judgement.
+- **Off** (`ZC_LLM=off`): rules only; candidates are listed for you. Also the automatic fallback when the model server
+  is unreachable (the report says so).
 
-`zc.py setup` reports whether the model is reachable; `tools/eval_classify.py --llm` measures it on your library
-(answers are cached, so comparing merge policies is free after the first run).
+`zc.py setup` reports which adjudicator is active and whether it is reachable; `tools/eval_classify.py --llm` measures
+a model on your library (answers are cached, so comparing merge policies is free after the first run).
 
 ## Install
 
@@ -133,8 +171,8 @@ with sync enabled, a Zotero Web API key.
 git clone https://github.com/jxxsteven7/zotero-claude.git ~/zotero-claude
 cd ~/zotero-claude
 cp .env.example .env      # ZOTERO_API_KEY, ZOTERO_LIBRARY_ID; the data directory is auto-detected (chmod 600 .env)
-./setup.sh                # health check: Python / .env / data dir / taxonomy / pdftotext / HTTPS / Zotero / API key / LLM
-claude                    # open a Claude Code session here and use /download <link>
+./setup.sh                # health check: Python / .env / data dir / taxonomy / pdftotext / HTTPS / Zotero / API key / adjudicator / skills
+claude                    # or codex, or kimi — open the agent here and use the download skill: /download <link>
 ```
 
 | Platform | pdftotext | Notes |
@@ -145,20 +183,20 @@ claude                    # open a Claude Code session here and use /download <l
 | any conda env | `conda install -c conda-forge poppler` | the interpreter that runs the scripts also finds its own env's pdftotext |
 
 `.env`, `cache/` and `inbox/` are git-ignored. Zotero-side settings: turn off `automaticTags` (per client) and, once,
-set the attachment rename template so file names don't inherit the title prefix (see `CLAUDE.md`).
+set the attachment rename template so file names don't inherit the title prefix (see `AGENTS.md`).
 
 ## How it fits together
 
 ```
 zc.py                     entry point
 taxonomy.toml             your collections, tags, rules, venues
-CLAUDE.md                 the agent's rules: how the library is accessed, what it may do, how to use the reports
+AGENTS.md                 the agent's rules: how the library is accessed, what it may do, how to use the reports (CLAUDE.md imports it)
 zotero_claude/
   fetch / sources / pdf / published / titles   metadata, PDFs, venue lookup, title format
-  classify / llm                               rule engine with evidence; local-model adjudication
+  classify / llm                               rule engine with evidence; adjudication by a local model or the agent
   connector / zapi / localdb                   Zotero desktop connector (new items + PDF), Web API (edits), read-only sqlite
   pipeline / discover / citations / recheck    the commands
-.claude/skills/           /download /tidy /discover /cite
+.agents/skills/           download / tidy / discover / cite (Agent Skills format); .claude/skills/ is the copy Claude Code reads
 logs/                     audit log (committed), library notes
 tools/                    eval_classify.py, fix_pdf_names.js
 ```

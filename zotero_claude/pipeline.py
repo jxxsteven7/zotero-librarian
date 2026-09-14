@@ -1,12 +1,12 @@
 """End-to-end flows.
 
 add    link -> fetch -> classify (rules + local LLM) -> save through the desktop connector -> verify on the server ->
-       commit the audit log -> print a report row.  Used by the /download skill.
+       commit the audit log -> print a report row.  Used by the download skill.
 tidy   organize items that were dropped into Zotero by hand (no status tag yet): fill missing metadata from arXiv /
        Crossref, format the title, set URL / short title, classify, file into a collection — all through the Web API.
 verify one item: server state + local sync state.
 Things a human must decide are marked "PAUSE" (collection boundary) and the item is skipped, with the exact command to
-finish it."""
+finish it. With ZC_LLM=agent the same pause carries the ADJUDICATE block; the agent finishes with `--confirm`."""
 import os, re, subprocess
 from datetime import date
 
@@ -25,8 +25,8 @@ def _text(slug):
     return open(p, encoding="utf-8").read() if os.path.exists(p) else ""
 
 
-def suggest_for(m, text=None):
-    return llm.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]) if text is None else text, has_pdf=bool(m.get("pdf_src")) if text is None else bool(text))
+def suggest_for(m, text=None, confirm=None):
+    return llm.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]) if text is None else text, has_pdf=bool(m.get("pdf_src")) if text is None else bool(text), confirm=confirm)
 
 
 def brief(m, sg):
@@ -54,6 +54,17 @@ def decide(sg, collection=None, tags=None, drop=None, also=None, first=False):
 
 
 def paused(sg): return any(f.startswith("BOUNDARY") for f in sg["flags"])
+
+
+def pause_cmd(head, sg, coll, also, need_coll, need_adj):
+    """The PAUSE message + the exact command that finishes the item once the human / agent has decided."""
+    why = []
+    if need_coll: why.append("collection undecided: " + "; ".join(f for f in sg["flags"] if "BOUNDARY" in f))
+    if need_adj: why.append("adjudication pending: " + ", ".join(sg["agent_request"][0]))
+    cmd = head + (f' --collection "{coll}"' if need_coll else "") + (f' --also "{also}"' if need_coll and also else "") + \
+          (f"  --confirm none   # or --confirm {','.join(sg['agent_request'][0])} (only the ones you confirm)" if need_adj else "")
+    print(f"  PAUSE: {'; '.join(why)} — not saved. Decide, then run (add --drop a,b to remove suggested tags):\n     {cmd}\n")
+    return "; ".join(why)
 
 
 def verify(key, wait=150, quiet=False):
@@ -111,13 +122,14 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
 
 
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True, dry_run=False,
-        venue=None, date_=None, name=None, url=None, short=None):
+        venue=None, date_=None, name=None, url=None, short=None, confirm=None):
+    if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zc.py save <slug> --confirm ...`)")
     rows = []
     for link in links:
         try: m = fetch.fetch_one(link)
         except Exception as e:
             print(f"=== {link}\n  x {e}\n"); rows.append(f"| — | {link} | — | — | — | x {str(e)[:120]} |"); continue
-        sg = suggest_for(m)
+        sg = suggest_for(m, confirm=confirm)
         brief(m, sg)
         if m.get("duplicate") and not force:
             d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
@@ -125,11 +137,10 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
         coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
         if dry_run:
             print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
-        if not collection and paused(sg):
-            extra = ",".join(t for t in tags_ if not t.startswith("status:"))
-            print(f"  PAUSE: collection uncertain, not saved. Decide, then run:\n     python3 zc.py save {m['slug']} --collection \"{coll}\"" +
-                  (f" --also \"{also_}\"" if also_ else "") + (f" --tags {extra}" if extra else "") + "\n")
-            rows.append(f"| PAUSE | {m['proposed_title']} | {coll}? | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | collection undecided: {'; '.join(f for f in sg['flags'] if 'BOUNDARY' in f)} |"); continue
+        need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
+        if need_coll or need_adj:
+            why = pause_cmd(f"python3 zc.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
+            rows.append(f"| PAUSE | {m['proposed_title']} | {coll}{'?' if need_coll else ''} | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | {why} |"); continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
         rows.append(row)
     print("\n" + HEADER + "\n" + "\n".join(rows))
@@ -137,9 +148,10 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
 
 
 def save(slug, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True,
-         venue=None, date_=None, name=None, url=None, short=None):
+         venue=None, date_=None, name=None, url=None, short=None, confirm=None):
     """Save something already fetched (after a PAUSE, or after `zc.py fetch`). Without --tags the script's suggestion is used."""
-    m = fetch.load(slug); sg = suggest_for(m)
+    m = fetch.load(slug); sg = suggest_for(m, confirm=confirm)
+    if confirm is None and llm.pending(sg): print(classify.fmt(sg)); print(llm.fmt_llm(sg)); raise SystemExit(f"  x ZC_LLM=agent: answer the ADJUDICATE block with --confirm <tags>|none")
     coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
     got, row = finish(slug, m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
     print("\n" + HEADER + "\n" + row)
@@ -169,7 +181,7 @@ def untidy_items(rows, only=None):
     return out
 
 
-def plan_item(r):
+def plan_item(r, confirm=None):
     """Everything tidy would write for one item: metadata fixes, title, url, short title, tags, collection."""
     text = pdf_text(os.path.join(DATA_DIR, r["pdfs"][0])) if r.get("pdfs") and os.path.exists(os.path.join(DATA_DIR, r["pdfs"][0])) else ""
     fields = {}; notes = []
@@ -197,7 +209,7 @@ def plan_item(r):
     if old_date and (date_ in ("????", "") or len(old_date) > len(date_)): date_ = old_date          # never make an existing prefix worse
     if old_venue and (venue in ("????", "arXiv") or old_venue == venue): venue = old_venue
     if not text and not abstract: notes.append("no PDF text and no abstract: nothing to classify from")
-    sg = llm.suggest(title, abstract, text, has_pdf=bool(text))
+    sg = llm.suggest(title, abstract, text, has_pdf=bool(text), confirm=confirm)
     new_title = f"[{date_}] [{venue}] {title}"
     if new_title != r["title"]: fields["title"] = new_title
     urls = project_urls(m or {"abstract": abstract}, text or None, pdf=os.path.join(DATA_DIR, r["pdfs"][0]) if r.get("pdfs") else None)
@@ -214,14 +226,15 @@ def plan_item(r):
                 notes=notes, abstract=abstract, has_text=bool(text))
 
 
-def tidy(only=None, write=True, wait=0, commit=True, collection=None):
+def tidy(only=None, write=True, wait=0, commit=True, collection=None, confirm=None):
+    if confirm is not None and len(only or ()) != 1: raise SystemExit("--confirm answers one item's ADJUDICATE block: use --only <key> --confirm ...")
     rows = localdb.load(refresh=True)
     todo = untidy_items(rows, only)
     if not todo: print("nothing to tidy: every item already carries a status tag"); return []
     env = zapi.env_or_die(); ck, _ = zapi.remote_collections(env)
     out = []
     for r in todo:
-        p = plan_item(r); sg = p["sg"]
+        p = plan_item(r, confirm); sg = p["sg"]
         print(f"=== {p['key']} | {p['old_title'][:80]}")
         print(f"  title     : {p['title']}   ({p['src']})")
         for k, v in p["fields"].items():
@@ -230,9 +243,10 @@ def tidy(only=None, write=True, wait=0, commit=True, collection=None):
         if l: print(l)
         for n in p["notes"]: print(f"  ! {n}")
         coll = collection or sg["collection"]
-        if not collection and paused(sg):
-            print(f"  PAUSE: collection uncertain, not written. Decide, then run: python3 zc.py tidy --only {p['key']} --collection \"{coll}\"\n")
-            out.append(f"| PAUSE | {p['title']} | {coll}? | {', '.join(p['tags'])} | {'yes' if r['pdfs'] else 'no'} | collection undecided: {'; '.join(f for f in sg['flags'] if 'BOUNDARY' in f)} |"); continue
+        need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
+        if need_coll or need_adj:
+            why = pause_cmd(f"python3 zc.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj)
+            out.append(f"| PAUSE | {p['title']} | {coll}{'?' if need_coll else ''} | {', '.join(p['tags'])} | {'yes' if r['pdfs'] else 'no'} | {why} |"); continue
         if not write:
             print(f"  [dry-run] would write: {coll} | +{', '.join(p['tags'])} | fields {list(p['fields'])}\n"); continue
         st, it = zapi.get_item(env, p["key"])

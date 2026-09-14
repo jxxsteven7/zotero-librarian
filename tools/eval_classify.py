@@ -12,6 +12,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.ins
 from zotero_claude import localdb, classify, llm, taxonomy as tx
 from zotero_claude.config import CACHE, DATA_DIR
 from zotero_claude.pdf import pdf_text
+from zotero_claude.titles import strip_prefix
 
 TXT = os.path.join(CACHE, "text"); os.makedirs(TXT, exist_ok=True)
 rows = localdb.load()
@@ -29,19 +30,16 @@ def text_of(r):
     open(p, "w", encoding="utf-8").write(t); return t
 
 
-def strip_title(t): return re.sub(r"^(\s*\[[^\]]*\]\s*){1,3}", "", t)
-
-
 tp = collections.Counter(); fp = collections.Counter(); fn = collections.Counter(); maybe_hit = collections.Counter(); maybe_all = collections.Counter()
 coll_ok = 0; coll_err = []; per_item = {}
 for r in rows:
     if only and r["key"] not in only: continue
     txt = text_of(r)
     if use_llm:
-        sg = llm.suggest(strip_title(r["title"]), r["abstract"], txt, has_pdf=bool(txt), policy=policy,
+        sg = llm.suggest(strip_prefix(r["title"]), r["abstract"], txt, has_pdf=bool(txt), policy=policy,
                          cache=os.path.join(CACHE, "llm", llm.settings()["model"].replace("/", "_").replace(":", "_"), r["key"] + ".json"))
     else:
-        sg = classify.suggest(strip_title(r["title"]), r["abstract"], txt, has_pdf=bool(txt))
+        sg = classify.suggest(strip_prefix(r["title"]), r["abstract"], txt, has_pdf=bool(txt))
     truth = {t for t in r["tags"] if t.split(":")[0] in FAM}
     pred = set(sg["sure"])
     per_item[r["key"]] = (sg, truth, r)

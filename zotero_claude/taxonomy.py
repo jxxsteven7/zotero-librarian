@@ -55,10 +55,6 @@ def sort_tags(tags):
     return sorted(set(tags), key=lambda t: (order.get(t.split(":")[0], 99), t))
 
 
-def status_of(tags):
-    return [t for t in tags if t.startswith("status:")]
-
-
 def policy_text():
     """The taxonomy rendered as plain text for the LLM prompt (descriptions are the policy)."""
     out = ["COLLECTIONS (file the paper in exactly one; the first matching rule wins):"]

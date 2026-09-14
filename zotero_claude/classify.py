@@ -19,9 +19,27 @@ REFS_RE = re.compile(r"\n\s*(references|bibliography)\s*\n", re.I)
 _rx_cache = {}
 
 
+def _alternatives(pat):
+    """Split a regex on its top-level `|` (parentheses and escapes respected)."""
+    out, depth, cur, i = [], 0, "", 0
+    while i < len(pat):
+        ch = pat[i]
+        if ch == "\\": cur += pat[i:i + 2]; i += 2; continue
+        if ch == "(": depth += 1
+        elif ch == ")": depth -= 1
+        if ch == "|" and depth == 0: out.append(cur); cur = ""
+        else: cur += ch
+        i += 1
+    return out + [cur]
+
+
 def _rx(pat):
+    """Each top-level alternative is case-insensitive unless it contains an upper-case letter (a proper noun or acronym:
+    `Panda`, `RL`, `DDPM`), which is matched as written. So `reinforcement learning|\\bRL\\b` catches both a Title Case
+    title and the acronym without letting `rl` inside a word match."""
     if pat not in _rx_cache:
-        _rx_cache[pat] = re.compile(pat, 0 if re.search(r"\\b[A-Z]|[A-Z]{2}", pat) else re.I)   # upper-case in a pattern => proper noun, match case
+        cs = lambda a: re.search(r"\\b[A-Z]|[A-Z]{2}|[A-Z][a-z]", a)
+        _rx_cache[pat] = re.compile("|".join(a if cs(a) else f"(?i:{a})" for a in _alternatives(pat)))
     return _rx_cache[pat]
 
 
@@ -167,7 +185,9 @@ def finish(c):
         if c.get("title_patterns") and any(_rx(p).search(title) for p in c["title_patterns"]): s += 6
         return s
     coll = None; winner = None
-    for c in tx.COLLECTION_RULES:
+    if c.get("lock_collection"):                                                # adjudicated tags must not move the paper (llm.merge)
+        coll = c["lock_collection"]; winner = next(x for x in tx.COLLECTION_RULES if x["name"] == coll)
+    for c in () if coll else tx.COLLECTION_RULES:
         if c.get("default"): continue
         if any(t not in all_sure for t in c.get("requires", [])): continue
         if c.get("not_in_title") and any(_rx(p).search(title) for p in c["not_in_title"]): continue

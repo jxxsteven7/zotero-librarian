@@ -1,14 +1,33 @@
 """New-machine health check (Ubuntu / macOS / Windows, standard library only, changes nothing):
 
-    python zc.py setup       # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
+    python zc.py setup [--sync-skills]      # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
 
 Checks, one by one: Python version, .env, Zotero data directory (auto-detected from prefs.js), pdftotext / pypdf,
-HTTPS, the Zotero desktop connector (port 23119), the Web API key (never printed), the local LLM. Every missing piece
+HTTPS, the Zotero desktop connector (port 23119), the Web API key (never printed), the classifier's adjudicator
+(local LLM / agent / off), and that .claude/skills mirrors .agents/skills (--sync-skills copies). Every missing piece
 comes with the install / configuration command for this platform. Exit code 1 = something is missing.
 """
-import os, ssl, stat, sys, urllib.error, urllib.request
+import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 
 from . import config, llm
+
+SKILLS_SRC = os.path.join(config.ROOT, ".agents", "skills")            # Agent Skills standard location (Codex, Kimi, ...)
+SKILLS_MIRROR = os.path.join(config.ROOT, ".claude", "skills")          # Claude Code only reads this one
+
+
+def stale_skills():
+    """Names of skills whose Claude Code copy differs from (or is missing next to) the .agents/skills source."""
+    stale = []
+    for name in sorted(os.listdir(SKILLS_SRC)) if os.path.isdir(SKILLS_SRC) else []:
+        a, b = os.path.join(SKILLS_SRC, name, "SKILL.md"), os.path.join(SKILLS_MIRROR, name, "SKILL.md")
+        if os.path.isfile(a) and not (os.path.isfile(b) and filecmp.cmp(a, b, shallow=False)): stale.append(name)
+    return stale
+
+
+def sync_skills():
+    for name in stale_skills():
+        os.makedirs(os.path.join(SKILLS_MIRROR, name), exist_ok=True)
+        shutil.copyfile(os.path.join(SKILLS_SRC, name, "SKILL.md"), os.path.join(SKILLS_MIRROR, name, "SKILL.md")); print(f"copied .agents/skills/{name}/SKILL.md -> .claude/skills/")
 
 OK, BAD, WARN = "ok ", "x  ", "!  "
 PY = "python" if config.IS_WIN else "python3"
@@ -111,12 +130,18 @@ def run(argv=()):
         except Exception as e:
             report(False, f"Web API unreachable: {e}", "network problem, see above")
 
-    # 9. local LLM
+    # 9. who adjudicates the borderline tags
     cfg = llm.settings(); ok, msg = llm.available(cfg)
-    if cfg["kind"] == "off": report(True, "local LLM disabled (ZC_LLM=off): rules-only classification", warn=True)
-    else: report(ok, f"local LLM: {msg}", "install Ollama (https://ollama.com), `ollama pull " + cfg["model"] + "`, or set ZC_LLM=off / ZC_LLM_URL in .env", warn=True)
+    if cfg["kind"] == "off": report(True, "adjudicator: none (ZC_LLM=off) — rules only, borderline tags are listed as candidates", warn=True)
+    elif cfg["kind"] == "agent": report(True, "adjudicator: the coding agent (ZC_LLM=agent) — no local model, costs a few hundred tokens per paper", warn=True)
+    else: report(ok, f"adjudicator: local model — {msg}", "install Ollama (https://ollama.com) and `ollama pull " + cfg["model"] + "`; or ZC_LLM=agent (the agent decides, costs tokens) / ZC_LLM=off in .env", warn=True)
+
+    # 10. skills: Claude Code reads .claude/skills, everything else .agents/skills — the copies must match
+    if "--sync-skills" in argv: sync_skills()
+    stale = stale_skills()
+    report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zc.py setup --sync-skills", warn=True)
 
     print()
     if problems:
         print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zc.py setup` again"); sys.exit(1)
-    print(f"All good: run `claude` in this directory and use /download <link>")
+    print("All good: open your agent here (claude / codex / kimi) and use the download skill (/download, $download, /skill:download) <link>")

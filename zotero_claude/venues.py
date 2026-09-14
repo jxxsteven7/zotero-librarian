@@ -5,7 +5,6 @@ from . import taxonomy as tx
 
 VENUE_ABBR = {v["name"].lower(): v["abbr"] for v in tx.VENUES if v.get("name")}          # full journal name (substring) -> abbr
 VENUE_RE = [(rx, v["abbr"]) for v in tx.VENUES for rx in v.get("match", [])]             # regex on free text -> abbr
-KNOWN_VENUE_TOKENS = {v["abbr"] for v in tx.VENUES} | set(tx.VENUE_MISC.get("other_tokens", []))
 ACCEPT_CONTEXT = re.compile(tx.VENUE_MISC.get("accept_context", "accept|publish|appear|proceedings"), re.I)
 
 # Publication statements printed on a PDF's first page (header / footer / footnote). First page only: the last page is

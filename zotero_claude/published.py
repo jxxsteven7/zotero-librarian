@@ -1,4 +1,4 @@
-"""Has an arXiv preprint been published? arXiv comment -> PDF first-page statement -> Semantic Scholar -> Crossref -> project page (source priority per CLAUDE.md)."""
+"""Has an arXiv preprint been published? arXiv comment -> PDF first-page statement -> Semantic Scholar -> Crossref -> project page (source priority per AGENTS.md)."""
 import html, json, re, time, urllib.error, urllib.parse
 
 from .http import http, get_text, UA_LOCAL

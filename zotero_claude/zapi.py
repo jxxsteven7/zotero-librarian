@@ -41,12 +41,6 @@ def remote_collections(env):
     return {c["data"]["name"]: c["key"] for c in js}, {c["key"]: c["data"] for c in js}
 
 
-def remote_versions(env):
-    st, _, js = req(env, "GET", "/items", params="?format=versions")
-    if st != 200: sys.exit(f"GET items versions -> {st} {js}")
-    return js
-
-
 def get_item(env, key):
     """(status, item json or error text)"""
     st, _, js = req(env, "GET", f"/items/{key}")

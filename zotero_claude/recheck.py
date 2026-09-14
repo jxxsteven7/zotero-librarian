@@ -8,6 +8,7 @@ from .config import DATA_DIR
 from .pdf import pdf_text
 from .published import lookup_published, s2_venues
 from .sources import ARXIV_ID, arxiv_batch, arxiv_by_title
+from .titles import strip_prefix
 from .venues import venue_from_context
 
 
@@ -32,7 +33,7 @@ def recheck(write=False, only=None, dates=False, search=False):
             if not aid:
                 got = re.search(r"arXiv:" + ARXIV_ID, text); aid = got.group(1) if got else None
         if not aid and search and dates:                                  # search arXiv by title (user short names like "PPO" are skipped)
-            name = re.sub(r"^(\s*\[[^\]]*\]\s*){1,3}", "", it["title"]); name = re.sub(r"[✅❗]", "", name).strip()
+            name = re.sub(r"[✅❗]", "", strip_prefix(it["title"])).strip()
             if len(re.sub(r"[^\x20-\x7e]", "", name)) >= 12:
                 aid = arxiv_by_title(name); time.sleep(3)
         if is_arxiv or (dates and aid): cands.append(dict(key=it["key"], title=it["title"], aid=aid, text=text, is_arxiv=is_arxiv, abstract=it.get("abstract", "")))

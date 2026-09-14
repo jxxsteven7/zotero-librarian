@@ -46,7 +46,7 @@ under their exact names, then right-click the collection > *Sync Items to Notion
 
 ## Day to day
 
-1. `/download` -> item lands in a Zotero collection -> a Notion row appears seconds later (short title, project URL, tags).
+1. `zc.py add` (the download skill) -> item lands in a Zotero collection -> a Notion row appears seconds later (short title, project URL, tags).
 2. Notes go into the Notion page body.
 3. Display name -> Zotero Short Title; link -> Zotero URL; tags / collection / status -> Zotero. Don't edit those four
    columns in Notion.

@@ -23,7 +23,7 @@ UNTAG = getattr(proposal, "UNTAG", {})           # key -> tags to remove (assign
 
 
 def target_keys(con):
-    """Items to touch: those in P plus every item carrying a RETAG old tag (which may not be in P, e.g. added by /download)."""
+    """Items to touch: those in P plus every item carrying a RETAG old tag (which may not be in P, e.g. added by `zc.py add`)."""
     trashed = {k for (k,) in con.execute("select key from items where itemID in (select itemID from deletedItems)")}
     keys = set(P) - trashed                       # trashed items are invisible to GET /items; skip them
     for old in RETAG:

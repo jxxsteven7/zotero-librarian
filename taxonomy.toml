@@ -1,5 +1,5 @@
 # taxonomy.toml — the library's taxonomy: collections, controlled tag vocabulary, venue abbreviations.
-# This is the single source of truth for what the classifier (rules + local LLM) may assign. Edit this file, not the code.
+# This is the single source of truth for what the classifier (rules + the adjudicating model or agent) may assign. Edit this file, not the code.
 #
 # Conventions
 #   * Tags are `family:value`, lowercase, hyphenated. Every item carries exactly one status on the reading axis.
@@ -436,6 +436,5 @@ abbr = "Simulation"
 name = "simulation"
 
 [venues_misc]
-other_tokens = ["arXiv", "Book", "TechReport", "ICRA-Best"]   # accepted in the venue bracket without being in the table
 # Free text (arXiv comment, notes, project page) is only trusted as an acceptance statement if it contains one of these
 accept_context = "accept|publish|appear|proceedings|to be presented|oral|spotlight|best|award|(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats|robotics: science and systems)\\)?\\s*20\\d\\d"
