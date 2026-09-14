@@ -8,6 +8,7 @@
                                             经 Zotero 桌面端 connector 接口入库：建条目 → 进分类+贴标签 → 送 PDF
   python3 download.py collect <itemKey> <collection>   事后经 Web API 追加第二个分类（save --also 同步没等到时用）
   python3 download.py tag <itemKey> tag1,tag2          事后经 Web API 补标签（只增不减；和用户讨论后追加边缘标签用）
+  没有 arXiv 号 / DOI 的论文（JMLR 之类）给论文页链接而不是 PDF 直链：脚本读页面的 citation_* meta，日期再用 PDF 首页的 Published 覆盖
   python3 download.py list                  列出 inbox 里还没入库的
   python3 download.py recheck [--dates] [--search] [--write] [--only K1,K2]
                                             复核库里的 arXiv 条目：[arXiv] 标题查中稿（arXiv comment / PDF 首页声明 / Semantic Scholar /
@@ -91,10 +92,12 @@ def slug_of(kind, ident):
 
 
 # ---------- 元数据源 ----------
+PARTICLES = {"van", "der", "den", "de", "von", "da", "di", "del", "della", "la", "le", "du", "dos", "das"}
 def split_name(full):
     parts = full.strip().split()
     if len(parts) == 1: return {"firstName": "", "lastName": parts[0], "creatorType": "author"}
-    return {"firstName": " ".join(parts[:-1]), "lastName": parts[-1], "creatorType": "author"}
+    cut = next((i for i in range(1, len(parts) - 1) if parts[i] in PARTICLES), len(parts) - 1)   # 小写小品词起算姓："van der Maaten"
+    return {"firstName": " ".join(parts[:cut]), "lastName": " ".join(parts[cut:]), "creatorType": "author"}
 
 
 def ws(s): return re.sub(r"\s+", " ", (s or "")).strip()
@@ -195,6 +198,37 @@ def meta_crossref(doi):
     return m
 
 
+def meta_page(url):
+    """没有 arXiv 号也没有 DOI 的论文页（JMLR / PMLR / ACL Anthology 之类）：只靠 citation_* meta。日期常常只有年，
+    拿到 PDF 后 pdf_first_page_date 会再用首页印的 Published 日期覆盖。"""
+    page = get_text(url)
+    metas = re.findall(r'<meta[^>]+name=["\']citation_(\w+)["\'][^>]+content=["\']([^"\']*)', page, re.I)
+    def meta(k, all_=False):
+        v = [html.unescape(c) for n, c in metas if n.lower() == k]
+        return v if all_ else (v[0] if v else "")
+    if not meta("title"): raise RuntimeError("网页里没有 citation_arxiv_id / citation_doi / arXiv 链接 / PDF 链接，也没有 citation_title，认不出是哪篇")
+    authors = [split_name(" ".join(reversed(a.split(", ", 1))) if ", " in a else a) for a in meta("author", True)]
+    journal, conf = meta("journal_title"), meta("conference_title")
+    d = (meta("online_date") or meta("publication_date") or meta("date")).replace("/", "-")
+    abstract = meta("abstract")
+    if not abstract:
+        g = re.search(r'<(p|div|section|blockquote)[^>]+(?:class|id)=["\'][^"\']*abstract[^"\']*["\'][^>]*>(.*?)</\1>', page, re.S | re.I)
+        abstract = g.group(2) if g else ""
+    m = dict(source="page", id=url, url=url, title=ws(meta("title")), authors=authors, abstract=ws(html.unescape(re.sub(r"<[^>]+>", " ", abstract))),
+             container=journal or conf, pub_year=d[:4], pdf_candidates=[meta("pdf_url")] if meta("pdf_url") else [],
+             date=d, date_src="page:citation_date" + ("" if len(d) == 10 else " ⚠ 不完整"))
+    v = abbr_from_name(journal) or abbr_from_name(conf)
+    m["venue"], m["venue_src"] = (v, "page") if v else (journal or conf or "????", "page:全名 ⚠")
+    itype = "conferencePaper" if conf and not journal else "journalArticle"
+    item = dict(itemType=itype, title=m["title"], creators=authors, abstractNote=m["abstract"], date=d, url=url,
+                volume=meta("volume"), issue=meta("issue"), pages=meta("firstpage") + ("-" + meta("lastpage") if meta("lastpage") else ""),
+                ISSN=meta("issn"), publisher=meta("publisher"), libraryCatalog=urllib.parse.urlparse(url).netloc, accessDate="CURRENT_TIMESTAMP")
+    if itype == "journalArticle": item["publicationTitle"] = journal
+    else: item["proceedingsTitle"] = conf; item["conferenceName"] = conf
+    m["item"] = {k: v for k, v in item.items() if v}
+    return m
+
+
 def meta_openreview(oid):
     r = json.loads(get_text(f"https://api2.openreview.net/notes?id={oid}"))
     if not r.get("notes"): r = json.loads(get_text(f"https://api.openreview.net/notes?id={oid}"))
@@ -261,6 +295,10 @@ def pdf_first_page_date(text, pub_year):
         d, mon, y = (m.group(1), m.group(2), m.group(3)) if order == "dmy" else (m.group(2), m.group(1), m.group(3))
         if pub_year and abs(int(y) - int(pub_year)) > 1: continue
         return f"{y}-{MONTH_NUM[mon]:02d}-{int(d):02d}", "pdf:online"
+    m = re.search(r"published:?\s+(\d{1,2})/(\d{2}|\d{4})\b", head)                     # JMLR 首页 "Published 11/08"：只到月
+    if m:
+        mon, y = int(m.group(1)), int(m.group(2)); y = y + 2000 if y < 100 else y
+        if 1 <= mon <= 12 and not (pub_year and abs(y - int(pub_year)) > 1): return f"{y}-{mon:02d}", "pdf:published(只到月)"
     return None
 
 
@@ -489,7 +527,7 @@ def make_title(m, name=None, venue=None, date_=None):
 # ---------- fetch ----------
 def fetch_one(link):
     os.makedirs(INBOX, exist_ok=True)
-    kind, ident = classify(link); pdf_hint = None; pre_pdf = None
+    kind, ident = classify(link); pdf_hint = None; pre_pdf = None; pdf_from = link
     if kind in ("pdf", "file"):                                    # 先拿到 PDF，从首页找 arXiv 号 / DOI
         tmp = os.path.join(INBOX, hashlib.sha1(ident.encode()).hexdigest()[:10] + ".pdf")
         if kind == "file": shutil.copy(ident, tmp); ok, why = True, ident
@@ -497,19 +535,18 @@ def fetch_one(link):
         if not ok: raise RuntimeError(f"PDF 下不下来: {why}")
         kind, ident = ids_from_pdf_text(pdf_text(tmp, tmp[:-4] + ".txt", first_pages=2))
         if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
-        if not kind: raise RuntimeError(f"PDF 首页找不到 arXiv 号或 DOI，没法拿元数据（文件留在 {tmp}）")
+        if not kind: raise RuntimeError(f"PDF 首页找不到 arXiv 号或 DOI，没法拿元数据（文件留在 {tmp}）；没有 DOI 的刊物（JMLR 之类）请给论文页链接，脚本读 citation_* meta")
         pre_pdf = tmp
     elif kind == "page":
-        kind, ident, pdf_hint = ids_from_page(ident)
-        if not kind: raise RuntimeError("网页里没有 citation_arxiv_id / citation_doi / arXiv 链接 / PDF 链接，认不出是哪篇")
+        page_url = ident; kind, ident, pdf_hint = ids_from_page(ident)
         if kind == "pdf":                                              # 页面只给了 PDF：下下来从首页认 arXiv 号 / DOI
             tmp = os.path.join(INBOX, hashlib.sha1(ident.encode()).hexdigest()[:10] + ".pdf")
             ok, why = download_pdf(ident, tmp)
             if not ok: raise RuntimeError(f"页面上的 PDF 下不下来: {why}")
-            src = ident; kind, ident = ids_from_pdf_text(pdf_text(tmp, tmp[:-4] + ".txt", first_pages=2))
+            pdf_from = ident; kind, ident = ids_from_pdf_text(pdf_text(tmp, tmp[:-4] + ".txt", first_pages=2))
             if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
-            if not kind: raise RuntimeError(f"页面 PDF 首页找不到 arXiv 号或 DOI（文件留在 {tmp}）")
             pre_pdf = tmp
+        if not kind: kind, ident = "page", page_url                     # 页面和 PDF 都没有 arXiv 号 / DOI：靠页面的 citation_* meta（JMLR 之类），PDF 留用
     if kind == "openreview":                                       # API 常被人机验证挡住 → 退到 PDF 路线
         try: m = meta_openreview(ident)
         except Exception as e:
@@ -519,10 +556,10 @@ def fetch_one(link):
             if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
             if not kind: raise RuntimeError(f"OpenReview API 拒了，PDF 首页也认不出 arXiv 号/DOI（文件留在 {tmp}）；给 arXiv 链接吧")
             pre_pdf, ident = tmp, ident2
-    if kind != "openreview": m = {"arxiv": meta_arxiv, "doi": meta_crossref}[kind](ident)
+    if kind != "openreview": m = {"arxiv": meta_arxiv, "doi": meta_crossref, "page": meta_page}[kind](ident)
     m["link"] = link; m["slug"] = slug_of(kind, ident)
     pdf = os.path.join(INBOX, m["slug"] + ".pdf"); txt = os.path.join(INBOX, m["slug"] + ".txt")
-    if pre_pdf: shutil.move(pre_pdf, pdf); m["pdf_src"] = link
+    if pre_pdf: shutil.move(pre_pdf, pdf); m["pdf_src"] = pdf_from
     else:
         cands = [u for u in ([m.get("pdf_url"), pdf_hint] + m.get("pdf_candidates", [])) if u]
         if m["source"] == "crossref":                                    # 期刊/会议论文：找 arXiv 版本兜底
@@ -541,7 +578,7 @@ def fetch_one(link):
         m["pdf_tried"] = tried
     if os.path.exists(pdf):
         text = pdf_text(pdf, txt)
-        if m["source"] == "crossref":                                    # PDF 首页印的上线日优先级高于 Crossref
+        if m["source"] in ("crossref", "page"):                          # PDF 首页印的上线日优先级高于 Crossref / citation meta
             got = pdf_first_page_date(text, m.get("pub_year"))
             if got: m["date"], m["date_src"] = got
             m["item"]["date"] = m["date"]

@@ -2,7 +2,7 @@
 import re
 
 VENUE_ABBR = {  # 期刊/会议全名(小写) -> 缩写
- "knowledge-based systems": "KBS", "advances in engineering software": "AES", "the journal of supercomputing": "JSC",
+ "journal of machine learning research": "JMLR", "knowledge-based systems": "KBS", "advances in engineering software": "AES", "the journal of supercomputing": "JSC",
  "advanced engineering informatics": "AEI", "systems science & control engineering": "SSCE", "expert systems with applications": "ESWA",
  "cluster computing": "Cluster Computing", "information sciences": "INS", "engineering applications of artificial intelligence": "EAAI",
  "computers & industrial engineering": "CAIE", "neural computing and applications": "NCA", "biomimetics": "Biomimetics",
