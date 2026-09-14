@@ -3,19 +3,55 @@
 用户是机器人/机器人学习方向博士生，用中文交流。这里存放整理 Zotero 库的脚本、提案和日志。
 **本文件是唯一规则来源**（原 `zotero-organize.md` 已并入并删除）。
 
+## 0. 仓库布局与命令（2026-09-14 整理）
+
+所有命令走一个入口 `python3 zc.py <命令>`（Windows 写 `python zc.py`；`--help` 列全部）。目标是**能写进脚本的判断都写进脚本**，
+Claude 只看脚本打印的结果、处理它标出的 ⏸/⚠，少读少想少说，省 token。
+
+```
+zc.py                          命令行入口（唯一）
+CLAUDE.md / README.md          规则（本文件）/ 新机器上手
+.claude/skills/download/       /download skill
+setup.sh                       = zc.py setup
+zotero_claude/                 代码包（只用标准库，三平台通用）
+  config.py                    .env、数据目录、pdftotext、只读打开 sqlite（connect_ro）、仓库路径
+  vocab.py                     四个分类 + 标签词表（和本文件 §2/§3 一致，改词表两处一起改）
+  venues.py                    刊/会全名 → 缩写
+  classify.py                  规则式自动分类/贴标签（§2/§3 的判定规则写成代码，输出 贴/候选/⚠ 三档并附证据）
+  pipeline.py                  add / save / verify：fetch → 分类 → 入库 → 等远端同步核对 → 提交日志 → 汇报表
+  fetch.py sources.py pdf.py published.py titles.py   抓元数据/PDF/全文、查中稿、标题与短名、查重
+  connector.py                 桌面端 connector 入库（建条目 + 分类 + 标签 + PDF）
+  zapi.py                      Web API（tag / untag / collect / set，乐观锁，自动记日志）
+  localdb.py batch.py recheck.py setup_check.py cli.py   本地库只读、批量整理、存量复核、体检、子命令
+proposals/proposal.py          批量整理的提案数据（approval mode）；proposal.md 是生成物
+docs/notero.md                 Zotero → Notion 镜像的配置
+logs/zotero-organize.log.md    所有写入的审计日志（进 git）
+tools/fix_pdf_names.js         Zotero Run JavaScript：改回被前缀污染的 PDF 文件名
+tools/eval_classify.py         用库里已核过标签的条目评估 classify（调规则后重跑看精确率）
+inbox/  cache/                 抓取暂存 / dump 输出与全文缓存（不进 git）
+```
+
+| 要做什么 | 命令 |
+|---|---|
+| 收论文（/download） | `zc.py add <链接…>`：一条龙，打印汇报表；分类拿不准会 ⏸ 停下并给出 `zc.py save …` 命令 |
+| 看/改一条 | `zc.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why …` · `collect <key> <分类>` · `set <key> url=… shortTitle=…` |
+| 存量复核 | `zc.py dump` 后 `zc.py recheck [--dates] [--search] [--write]` |
+| 批量整理 | `zc.py dump` → 改 `proposals/proposal.py` → `zc.py proposal` → `zc.py apply --dry-run / --plan / --apply` |
+| 新机器 | `./setup.sh`（= `zc.py setup`） |
+
 ## 1. 库在哪、怎么读写
 
 - 数据目录由 `config.py` 决定：`.env` 的 `ZOTERO_DATA_DIR` > 本机 Zotero `prefs.js` 的 `extensions.zotero.dataDir`（三平台的 profile 位置都会找）> 平台默认
   （`~/Zotero`，Windows `C:\Users\你\Zotero`）；这台 Ubuntu 工作站是 `~/Documents/Zotero`。主库 `zotero.sqlite`，PDF 在 `storage/<附件key>/`。不改 PDF。
-- **读**：`python3 dump_zotero.py` → `library_dump.json`（标题/作者/分类/标签/PDF 路径/笔记/批注；不进 git）。
-  sqlite 一律用 `config.connect_ro()` 打开：**Zotero 10 起数据库是 WAL 模式**（`zotero.sqlite-wal`），老办法 `?mode=ro&immutable=1` 只读主文件、
+- **读**：`python3 zc.py dump` → `cache/library_dump.json`（标题/作者/分类/标签/PDF 路径/笔记/批注；不进 git）。
+  sqlite 一律用 `zotero_claude.config.connect_ro()` 打开：**Zotero 10 起数据库是 WAL 模式**（`zotero.sqlite-wal`），老办法 `?mode=ro&immutable=1` 只读主文件、
   看到的是几小时前的旧数据（2026-09-12 踩过：远端 3287 本地一直读出 3270），普通只读又被 Zotero 的 exclusive 锁挡住；`connect_ro()` 把主文件 + WAL
   拷到临时目录再打开，Zotero 运行中也能拿到最新状态。别再自己写 `sqlite3.connect(...)`。
   凭据在 `.env`（`config.py` 读，每台机器各一份）。
-- **三平台通用**（Ubuntu / macOS / Windows，2026-09-12 起）：脚本只用标准库；平台差异全收在 `config.py`——数据目录探测、
+- **三平台通用**（Ubuntu / macOS / Windows，2026-09-12 起）：脚本只用标准库；平台差异全收在 `zotero_claude/config.py`——数据目录探测、
   `pdftotext` 查找（PATH → 当前 Python 所在 conda 环境 → Homebrew/winget/scoop/choco 常见位置 → `.env` 的 `PDFTOTEXT`），找不到退到 `pypdf`；
   所有文件读写显式 UTF-8，stdout 强制 UTF-8（否则 Windows 管道下打 ✓⚠− 会崩）。**Windows 上命令是 `python` 不是 `python3`**（Claude Code 的 Bash 是 Git Bash，
-  grep/sed 都有）。新机器先 `./setup.sh`（= `python setup.py`）体检，缺什么打印对应平台的安装命令；仓库 `.gitattributes` 钉死 LF。
+  grep/sed 都有）。新机器先 `./setup.sh`（= `python zc.py setup`）体检，缺什么打印对应平台的安装命令；仓库 `.gitattributes` 钉死 LF。
 - **写**：只走 Zotero Web API（库 ID 14568484），**绝不直接改 sqlite**——Zotero 常驻运行且开着同步。
   本地 API（23119）是只读的且没开；`zotero-skills` 插件底层也是同一个 Web API，没装、不需要。
   key 在 `.env`（600 权限，裸 key 一行），个人库已开写权限。**永远不要把 key 打印到对话或日志。** 缺 key 就停下来问。
@@ -24,7 +60,7 @@
   判断本地有没有未上传改动看 `synced=0`。
 - **新条目 + PDF 走桌面端 connector 接口**（`http://127.0.0.1:23119/connector/*`，浏览器插件保存文献用的就是它，Zotero 开着就在）：
   本机附件同步是 **WebDAV（坚果云）**，Web API 上传的文件客户端拿不到，所以 PDF 必须让 Zotero 自己存。
-  用法在 `download.py`：`saveItems`（建条目；载荷里的 tags 会被记成自动标签、attachments 被忽略，所以都不放那儿）→
+  用法在 `zotero_claude/connector.py`：`saveItems`（建条目；载荷里的 tags 会被记成自动标签、attachments 被忽略，所以都不放那儿）→
   `updateSession`（`target: "C<本地collectionID>"` + `tags` 数组 → 手动标签、进分类）→ `saveAttachment`（`X-Metadata` 头 + `application/pdf` 原始字节）。
   请求 UA 不能以 `Mozilla/` 开头，Host 必须是 127.0.0.1。saveItems 不返回 key，写完按标题从本地 sqlite 读回核对。
 - 客户端自动同步很快（写完几分钟内 `libraries.version` 追平），写完重跑 dump 核对。
@@ -56,16 +92,19 @@
 | `type:` | survey · benchmark · dataset | 文献类型，与 method 正交 |
 | `status:` | 读进度轴（恰好一个）：to-read-first → to-read → skimmed → read；展示轴（可选）：to-present · presented；复现轴（可选）：to-reproduce → reproducing → reproduced | 新条目默认 `to-read`；**不降级**（read→skimmed 之类需用户批准）；展示/复现轴不主动碰 |
 
-- 判定依据：摘要 + 正文实验部分（`pdftotext <pdf> - | grep -n -i …` 定点查；库里 PDF 的路径在 dump 的 `pdfs` 字段），**不能只看标题**。
+- 判定依据：摘要 + 正文实验部分，**不能只看标题**。这套判定已写成 `zotero_claude/classify.py`（标题/摘要里出现 = 论文自己说的；正文里要出现够多次，
+  相关工作/基线里提一嘴不算；综述只贴 type + method，基准只贴 type + embod；VLA 一律 vision+language；base 要有微调语境）。
+  拿库里 129 篇已核过的条目评估（`tools/eval_classify.py`）：自动贴的标签精确率 0.89，漏的 3/4 会列成候选。脚本输出三档：**贴**（直接写）、
+  **候选**（不写，汇报里给用户讨论）、**⚠ 提示**（分类边界、embod 判不出…）。人工核对时仍可 `pdftotext <pdf> - | grep -n -i …` 定点查。
   embod/modality 判不出就留空并标 Uncertain，不猜；四个分类都不贴切就放 AI Foundation 并标记。
 - 标签是**库级**的，Zotero 里不存在"某个分类私有的标签"；词表按机器人学习设计，所以 method/embod/tech/base/modality 实际上
   只出现在 Dex-Manipulation / Humanoid / AI Foundation 的条目上，Evolution Algorithm 的条目只有 `status:`（不需要硬贴）。
   标签选择器默认只显示当前分类里条目带的标签，要看全部得勾 "Display All Tags in This Library"。
-- 需要词表外的新标签：写进提案的"Proposed new tags"，用户批准后再用，不私造；不用无前缀的裸标签。
+- 需要词表外的新标签：写进提案的"Proposed new tags"，用户批准后再用，不私造；不用无前缀的裸标签。批准后同时改本文件 §3 和 `zotero_claude/vocab.py`。
 - **arXiv 自动标签一律删除**（用户要求）。不改用户已有标签名。除 `notion` 外不再有裸标签（用户手打的 `Dex-Hand` 已于 2026-09-12 按其要求删除）。
 - `notion` 是 **Notero 插件**自动打的裸标签（2026-09-12 起，Dex-Manipulation / Humanoid / AI Foundation 三个分类的条目都有），保留、不算词表外；
   同一批条目下各有一个标题为 `Notion` 的链接附件（linkMode 3，指向该条的 Notion 页面），是 Notero 定位页面的键，**不要删**。Notero 只单向推 Zotero → Notion，
-  我经 Web API 改的东西同步下来后也会自动推过去。配置和日常规则在 `notero.md`。
+  我经 Web API 改的东西同步下来后也会自动推过去。配置和日常规则在 `docs/notero.md`。
 
 彩色标签（库设置 `tagColors`，选中条目按数字键切换，`to-read` 不着色）：
 
@@ -82,7 +121,7 @@
 - 日期精确到天，含义是**这篇最早出现在学术界的日子**（用户 2026-09-12 定）。arXiv 论文用 **v1 提交日**（arXiv API `published`，UTC），
   **之后作者更新版本、用户重下最新版、中稿改了第二个括号，日期都不动**。期刊/会议论文**若有更早的 arXiv 预印本，也用预印本 v1**
   （`recheck --dates --search` 会按标题去 arXiv 搜；RL-100 就是 SR 2026 但 arXiv 2025-10）；机构自己官网先发、后传 arXiv 的（PI 的 RL Token）用官网日。
-  没有预印本的期刊用**在线发表日**——PDF 首页印的 "Available online / Published online / Date of publication"，其次 Crossref `published-online`；
+  没有预印本的期刊用**在线发表日**——PDF 首页印的 "Available online / Published online / Date of publication"（JMLR 只印 "Published 11/08" 就写到月），其次 Crossref `published-online`；
   Crossref `created` 只在与出版年相差 ≤1 时可用（老论文的 created 是 DOI 登记日，不可信）；
   PDF 正文里抓到的日期要和出版年对得上，否则是引用噪音。拿不到精确日期就能到哪写哪（`[1999-07]`、`[1987]`），**不编造日子**。
 - 刊/会用缩写：CoRL RSS ICRA IROS ICLR ICML NeurIPS CVPR AISTATS · ESWA EAAI KBS ASOC SWEVO INS AES CAIE NCA JOGO
@@ -90,32 +129,33 @@
   来源优先级：用户已写 > Zotero 字段 > 笔记/arXiv comment 里的 "Accepted to …" > PDF 首页出版声明 > Semantic Scholar（只认
   type=conference 或非 arXiv DOI）> Crossref 标题搜索（RSS/IEEE 有 DOI）> 项目页/README（arXiv comment、摘要、PDF 首页里的链接，
   找 "Accepted to …" 或页头徽章 "CoRL 2025"；写 under review/anonymous 的记下）> WebSearch > 常识（标 ⚠ 请用户过目）。
-  **用户习惯下 arXiv 最新版，但已中稿的要写会议不写 `[arXiv]`**；`download.py fetch` 收新论文时自动跑这条链，
-  `download.py recheck [--dates]` 给存量 `[arXiv]` 补查（`--dates` 同时核对日期是不是 v1）。DBLP 和 OpenReview 都有人机验证，脚本用不了。
+  **用户习惯下 arXiv 最新版，但已中稿的要写会议不写 `[arXiv]`**；`zc.py add/fetch` 收新论文时自动跑这条链，
+  `zc.py recheck [--dates]` 给存量 `[arXiv]` 补查（`--dates` 同时核对日期是不是 v1）。DBLP 和 OpenReview 都有人机验证，脚本用不了。
   查不到就保留 `[arXiv]`，不凭印象填会议。
 - 用户自己写的部分（短名 `GWO 2014`、昵称 `[VAE]` `[ALOHA/ACT]`、标记 ✅❗、`[ICRA-Best]`）**原样保留在两个括号之后，绝不改**。
 - **Short Title 字段 = 论文短名**（2026-09-12 起，Notero 拿它当 Notion 页面标题）：用户昵称 `[ALOHA/ACT]` → `ALOHA/ACT` > 冒号前的名字（`RL-100`）>
-  去掉前缀的原名。`download.short_title()` 算，`/download` 入库自动填（`--short` 覆盖）；改标题时 Short Title 不用跟着动（它本来就不含前缀）。
+  去掉前缀的原名。`zotero_claude/titles.py` 的 `short_title()` 算，`/download` 入库自动填（`--short` 覆盖）；改标题时 Short Title 不用跟着动（它本来就不含前缀）。
 - **URL 字段 = 项目页**（github.io / 机构博客 / sites.google.com/view），没有项目页才放 arXiv abs 或 DOI 链接（Notion 的 `URL` 列显示的就是它）。
-  `fetch` 从 arXiv comment、摘要、PDF 首页正文和 PDF 超链接注释（`/URI`）里找，卡片打印"项目页"，`save` 默认用它（`--url` 覆盖）。
+  `fetch` 从 arXiv comment、摘要、PDF 首页正文和 PDF 超链接注释（`/URI`）里找，卡片打印"项目页"，入库默认用它（`--url` 覆盖）。
+  没有 arXiv 号也没有 DOI 的论文（JMLR / PMLR / ACL Anthology）给**论文页**链接而不是 PDF 直链：脚本读页面的 `citation_*` meta。
   arXiv 号不靠 URL：查重和 `recheck` 认 DOI 字段 `10.48550/arXiv.…` 和 PDF 水印。存量 74 篇（三个分类）已于 2026-09-12 改完，Evolution Algorithm 的没动。
 - **标题前缀只是显示用，PDF 文件名不要带**。Zotero 7+ 默认 `autoRenameFiles.onMetadataChange=true`：父条目标题一改，
   凡是文件名还是模板生成的附件就会跟着改名（2026-09-12 发现约 50 个 PDF 已经被改成 `作者 - 年 - [日期] [刊] 原名.pdf`）。
   解决：文件名模板（设置 → 通用 → 文件重命名 → 自定义）改成去掉前两个方括号：
   `{{ firstCreator suffix=" - " }}{{ year suffix=" - " }}{{ title replaceFrom="^\[[^\]]*\] *(\[[^\]]*\] *)?" replaceTo="" truncate="120" }}`
   这是库的**同步设置**（`attachmentRenameTemplate`），用户 2026-09-12 已设好，其他设备的 Zotero 会自动跟上，不用每台再设。
-  之后改标题文件名不再变；已经带前缀的用 Run JavaScript 跑仓库里的 `fix_pdf_names.js` 一次性改回（只动文件名里有 ` - [` 的，不碰用户手工命名的 `NOA 2023.pdf` 之类）。
-- 缩写表在 `venues.py`，新缩写只加那里。存量 110 条已于 2026-09-11 批量改完（老→新对照在日志里），当时的 retitle 脚本和中间数据已删。
+  之后改标题文件名不再变；已经带前缀的用 Run JavaScript 跑仓库里的 `tools/fix_pdf_names.js` 一次性改回（只动文件名里有 ` - [` 的，不碰用户手工命名的 `NOA 2023.pdf` 之类）。
+- 缩写表在 `zotero_claude/venues.py`，新缩写只加那里。存量 110 条已于 2026-09-11 批量改完（老→新对照在日志里），当时的 retitle 脚本和中间数据已删。
 
 ## 5. 工作流（approval mode）
 
-1. `dump_zotero.py` 刷新 → 新条目在 `proposal.py` 的 `P` 里加行（`type:` 放 `EXTRA_TAGS`），`python3 proposal.py` 生成提案表。
-2. `apply.py --dry-run`（离线构造载荷）→ `--plan`（联网只读核对远端版本）→ 把提案表给用户。
+1. `zc.py dump` 刷新 → 新条目在 `proposals/proposal.py` 的 `P` 里加行（`type:` 放 `EXTRA_TAGS`），`zc.py proposal` 生成提案表 `proposals/proposal.md`。
+2. `zc.py apply --dry-run`（离线构造载荷）→ `--plan`（联网只读核对远端版本）→ 把提案表给用户。
    提案表格式：`| # | Title | Collection(s) | method: | embod: | tech: | base: | modality: | status: | Note |`，另附 Uncertain 与 Proposed new tags。
 3. **用户批准后**才 `--apply`，只写批准的行；用户可以逐行改。用户没说 "autonomous mode" 前一直是 approval mode；
    说了以后新条目可端到端处理，但仍要逐笔记日志并标出拿不准的。
 4. 写完回读远端逐条比对，再重跑 dump 确认客户端同步。
-5. 每批写入都追加 `zotero-organize.log.md`：
+5. 每批写入都追加 `logs/zotero-organize.log.md`（`zc.py add/tag/untag/collect/set/recheck --write/apply` 都自动记；`add` 还会把日志 commit + push）：
    ```
    ## <日期> — batch <n>
    ### Applied      - <key> | <title> | +collection: … | +tags: … | −tags: …
@@ -123,18 +163,20 @@
    ### Proposed new tags   - <tag> | 理由 | 需要它的条目
    ```
 6. 不删条目、不删笔记、不删分类；删东西只在用户明说时做，做前把成员快照写进日志，并优先扔回收站而非永久删。
-7. 词表改名/合并标签：在 `proposal.py` 写 `RETAG = {"旧标签": "新标签"}`，`apply.py` 会对库里**所有**带旧标签的条目摘旧补新
-   （含 P 之外、`/download` 收的条目），日志记 `−tags:`。这是唯一会从条目上摘标签的路径。回收站里的条目自动跳过。
+7. 词表改名/合并标签：在 `proposals/proposal.py` 写 `RETAG = {"旧标签": "新标签"}`，`zc.py apply` 会对库里**所有**带旧标签的条目摘旧补新
+   （含 P 之外、`/download` 收的条目），日志记 `−tags:`。回收站里的条目自动跳过。摘标签的另一条路是 `zc.py untag <key> a,b --why …`，
+   只用于修正**刚入库**条目上脚本贴错的标签，或用户明说要摘的。
 
-**新论文入库走 `/download`**（项目级 skill `.claude/skills/download/SKILL.md`，会话要开在仓库目录；脚本 `download.py`）——这条是用户授权的端到端自动流程，
-不逐篇征求批准：`fetch <链接>`（arXiv / DOI / OpenReview / PDF 直链 / 本地 PDF / 项目页 → 元数据 + PDF + 全文 txt + 查重 + 建议标题）
-→ 读摘要和实验部分定分类与标签 → `save <slug> --collection … --tags …`（status 默认 `to-read`）→ 汇总表。
-重复条目默认跳过；词表外标签不私造；付费期刊抓不到 PDF 时条目照建，让用户把 PDF 拖进去或给本地路径重跑。日志自动追加。
+**新论文入库走 `/download`**（项目级 skill `.claude/skills/download/SKILL.md`，会话要开在仓库目录）——这条是用户授权的端到端自动流程，
+不逐篇征求批准：`zc.py add <链接…>` 一条命令做完 fetch（arXiv / DOI / OpenReview / PDF 直链 / 本地 PDF / 项目页 / citation-meta 论文页 → 元数据 + PDF +
+全文 + 查重 + 建议标题）→ `classify` 定分类与标签 → connector 入库（status 默认 `to-read`）→ 等远端同步核对 → 日志 commit/push → 打印汇报表。
+Claude 只做三件事：转述汇报表；把"候选"标签和 ⚠ 列给用户讨论（同意后 `zc.py tag`）；⏸ 分类拿不准的自己读摘要定分类后跑脚本给的 `zc.py save …`。
+重复条目默认跳过；词表外标签不私造；付费期刊抓不到 PDF 时条目照建，让用户把 PDF 拖进去或给本地路径重跑。
 
 ## 6. 现状与遗留（2026-09-12）
 
 - 仓库在 GitHub 私有库 `jxxsteven7/zotero-claude`，Ubuntu / macOS / Windows 三台共用；新机器按 README 走一遍 `setup.sh`。
-  `.env`、`library_dump*.json`、`inbox/` 不进 git。Zotero 端每台机器要各做一次的只有关 `automaticTags`（客户端偏好，不同步）；
+  `.env`、`cache/`、`inbox/` 不进 git。Zotero 端每台机器要各做一次的只有关 `automaticTags`（客户端偏好，不同步）；
   标签颜色和 PDF 文件名模板都是库的同步设置，已经设好。
 
 - 2026-09-12 `embod:dual-arm` 并入 `embod:bimanual`（23 条摘旧标签，其中 4 条补 bimanual）；同日新建 `Humanoid` 分类，BFM-Zero 从 AI Foundation 移入，
@@ -146,8 +188,11 @@
   `DS2CBILL` AlexNet 收的是 CACM 2017 重印版，原文是 NeurIPS 2012；`ESK4SDNZ` 的 `[IJRR]` 是用户自己写的，API/PDF 里查不到；
   `AP8LAAEQ` MoDE-VLA 有 3 个 method（rl/vla/teleop，teleop 是用户 09-11 批的）；`UHXQKX93` MINT 无机器人本体，embod 留空。
 - 121 篇（用户自己把 `Z6QB6YQG` NSM-SFS 2023 扔进了回收站）全部贴齐标签、归入分类、标题统一格式；arXiv 自动标签已清空；
-  4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 测试时收了 π0（`HKWZ6MV2`）。
+  4 个无父条目的孤立 PDF 已按用户要求永久删除。之后用户自己加了 VLA-Precision（`G4N8QAK5`），`/download` 陆续收了 π0、DeCAL、OpenWAM、TacRefineNet、
+  ArtManip、Dex-X、VideoMimic、t-SNE 等（见日志）。
+- 2026-09-14 仓库按包结构重排（`zc.py` + `zotero_claude/`），判定规则写进 `classify.py`，`/download` 改成 `zc.py add` 一条龙；老命令 `download.py` `apply.py`
+  `dump_zotero.py` `setup.py` 都不存在了。
 - `KNFD9629`（HS2001）与 `GUHVP29Z` 是同一篇 Harmony Search 的重复条目，留给用户处理。
 - 2026-09-12 本机 Zotero 升到 10.0.2（数据库 userdata 125→129，旧程序和备份已按用户要求删除）；Notion 侧改用 Notero 2.1.0 单向镜像三个分类，
-  现行配置见 `notero.md`（74 篇已推到 Notion `All Papers`，URL 改项目页 63 条、Short Title 补 33 条，日志有）。
+  现行配置见 `docs/notero.md`（74 篇已推到 Notion `All Papers`，URL 改项目页 63 条、Short Title 补 33 条，日志有）。
 - `extensions.zotero.automaticTags` 还没关（需用户在 Zotero 设置里操作，或退出 Zotero 后由我改 prefs.js）。

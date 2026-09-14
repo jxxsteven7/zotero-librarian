@@ -1,29 +1,24 @@
-#!/usr/bin/env python3
-"""按批准的提案写 Zotero（Web API v3，PATCH 语义批量 POST）。
+"""批量整理（approval mode）：按 proposals/proposal.py 里批准的提案写 Zotero（Web API v3，PATCH 语义批量 POST）。
 
-  python3 apply.py --dry-run                 # 离线：用本地 sqlite 的 version / collection key 构造载荷，不联网、不写
-  python3 apply.py --plan                    # 联网只读：核对远端版本与本地是否一致，列出将写的内容
-  python3 apply.py --apply [--only K1,K2] [--no-rename] [--no-status]   # 真写，逐批追加 zotero-organize.log.md
+  python3 zc.py apply --dry-run                 # 离线：用本地 sqlite 的 version / collection key 构造载荷，不联网、不写
+  python3 zc.py apply --plan                    # 联网只读：核对远端版本与本地是否一致，列出将写的内容
+  python3 zc.py apply --apply [--only K1,K2] [--no-rename] [--no-status]   # 真写，逐批追加 logs/zotero-organize.log.md
 
-凭据与路径：同目录 .env（见 config.py）。key 只读文件，不打印。
 规则：只增标签/分类、不删任何东西；自动标签(type=1)原样保留；只改 RENAMES 里的标题。
 例外只有三个：RETAG（词表改名）会从条目上摘掉旧标签；UNTAG 摘掉某条目贴错的标签；UNCOLLECT 会把条目移出指定分类。
 """
-import argparse, datetime, json, os, re, sqlite3, sys, time, urllib.request, urllib.error, importlib.util
+import argparse, datetime, importlib.util, json, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-from config import connect_ro, load_env
-LOG = os.path.join(HERE, "zotero-organize.log.md")
-API = "https://api.zotero.org"
-FAMILIES = ("method", "embod", "tech", "base", "modality")
+from .config import LOG, PROPOSAL_PY, connect_ro
+from .vocab import COLLECTIONS as ROOTS, FAMILIES
+from .zapi import req, env_or_die
 
-spec = importlib.util.spec_from_file_location("proposal", os.path.join(HERE, "proposal.py"))
+spec = importlib.util.spec_from_file_location("proposal", PROPOSAL_PY)
 proposal = importlib.util.module_from_spec(spec); spec.loader.exec_module(proposal)
 P, RENAMES = proposal.P, proposal.RENAMES
 RETAG = getattr(proposal, "RETAG", {})   # 旧标签→新标签，作用于库里所有带旧标签的条目（不限于 P）
 UNCOLLECT = getattr(proposal, "UNCOLLECT", {})   # key → 要移出的分类名列表
 UNTAG = getattr(proposal, "UNTAG", {})           # key → 要摘掉的标签列表（贴错的）
-ROOTS = ["Evolution Algorithm", "Dex-Manipulation", "AI Foundation", "Humanoid"]   # Misc 于 2026-09-11 改名 AI Foundation；Humanoid 2026-09-12 新建
 
 
 def target_keys(con):
@@ -99,34 +94,7 @@ def build_updates(items, colls, only=None, rename=True, status=True):
 
 
 # ---------------- Web API ----------------
-def req(env, method, path, body=None, params=""):
-    url = f"{API}/users/{env['ZOTERO_LIBRARY_ID']}{path}{params}"
-    data = json.dumps(body).encode() if body is not None else None
-    hdr = {"Zotero-API-Key": env["ZOTERO_API_KEY"], "Zotero-API-Version": "3"}
-    if data: hdr["Content-Type"] = "application/json"
-    for attempt in range(6):
-        try:
-            r = urllib.request.urlopen(urllib.request.Request(url, data=data, headers=hdr, method=method), timeout=60)
-            txt = r.read().decode()
-            if r.headers.get("Backoff"): time.sleep(int(r.headers["Backoff"]))
-            return r.status, dict(r.headers), (json.loads(txt) if txt else None)
-        except urllib.error.HTTPError as e:
-            if e.code == 429 or (e.code >= 500 and attempt < 5):
-                time.sleep(int(e.headers.get("Retry-After", 5))); continue
-            return e.code, dict(e.headers), e.read().decode()
-    raise RuntimeError("重试耗尽: " + url)
-
-
-def remote_collections(env):
-    st, _, js = req(env, "GET", "/collections", params="?limit=100")
-    if st != 200: sys.exit(f"GET collections -> {st} {js}")
-    return {c["data"]["name"]: c["key"] for c in js}, {c["key"]: c["data"] for c in js}
-
-
-def remote_versions(env):
-    st, _, js = req(env, "GET", "/items", params="?format=versions")
-    if st != 200: sys.exit(f"GET items versions -> {st} {js}")
-    return js
+from .zapi import remote_collections
 
 
 def remote_state(env):
@@ -148,11 +116,11 @@ def log(lines):
     with open(LOG, "a", encoding="utf-8") as f: f.write("\n".join(lines) + "\n")
 
 
-def main():
-    ap = argparse.ArgumentParser()
+def run(argv):
+    ap = argparse.ArgumentParser(prog="zc.py apply")
     ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--plan", action="store_true"); ap.add_argument("--apply", action="store_true")
     ap.add_argument("--only"); ap.add_argument("--no-rename", action="store_true"); ap.add_argument("--no-status", action="store_true")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     only = set(a.only.split(",")) if a.only else None
     items, colls = local_state()
     updates, missing_roots = build_updates(items, colls, only, not a.no_rename, not a.no_status)
@@ -166,9 +134,7 @@ def main():
         for k, p, d in updates[:8]: print("  ", k, "|", " | ".join(d))
         print("  …"); return
 
-    env = load_env()
-    if not env.get("ZOTERO_API_KEY"):
-        sys.exit("缺 ZOTERO_API_KEY：请在仓库目录的 .env 写入 ZOTERO_API_KEY=...（不要贴进对话）")
+    env = env_or_die()
     rnames, rdata = remote_collections(env)
     remote = remote_state(env)
     absent = [k for k in items if k not in remote]
@@ -221,6 +187,3 @@ def main():
     log(["### Proposed new tags"] + [f"- {t} | {w} | {it}" for t, w, it in proposal.NEW_TAGS])
     print("完成。日志:", LOG)
 
-
-if __name__ == "__main__":
-    main()

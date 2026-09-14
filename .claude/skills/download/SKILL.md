@@ -1,70 +1,44 @@
----
-name: download
-description: |
-  把论文链接收进 Zotero：下载 PDF、建条目、按规则命名（[YYYY-MMDD] [刊/会] 原名）、归入四分类之一、
-  按受控词表打标签，status 默认 to-read。用法 /download <链接或本地 PDF 路径>...（arXiv / DOI / OpenReview /
-  PDF 直链 / 项目页）。端到端自动完成，不逐篇征求批准，做完给汇总表。
----
-
 # /download — 论文入库
 
-这是本仓库的项目级 skill（会话在仓库目录里才有）。脚本 `download.py`，规则全在仓库 `CLAUDE.md`（分类 §2、标签词表 §3、
-标题格式 §4），词表和判定规则以它为准。
+项目级 skill（会话在仓库目录里才有）。判定规则在仓库 `CLAUDE.md`（§2 分类、§3 词表、§4 标题），**判定本身已写进脚本**
+（`zotero_claude/classify.py`）：你不用读全文、不用 grep，只跑一条命令、转述结果、处理它标出的 ⏸ / ⚠ / 候选。
 
-参数 `$ARGUMENTS` 是一个或多个链接 / 本地 PDF 路径，空格分隔。没给参数就问要哪几篇。
+参数 `$ARGUMENTS` 是一个或多个链接 / 本地 PDF 路径，空格分隔（arXiv / DOI / OpenReview / PDF 直链 / 项目页 / JMLR 之类的论文页）。
+没给参数就问要哪几篇。Windows 上 `python3` 写 `python`。
 
-三平台通用（Ubuntu / macOS / Windows）：下面的 `python3` 在 Windows 上写 `python`；`pdftotext` 没装时脚本自动退到 `pypdf`，
-两个都没有会打印 ⚠ 和安装命令——那就先让用户 `python setup.py` 体检再继续，别在没正文的情况下猜标签。
+## 流程
 
-## 流程（每篇都走完，不要只做一半）
+1. 在仓库目录跑（等远端同步最多 150 秒/篇，Bash 超时给 600000）：
 
-1. **抓取**：`python3 download.py fetch <链接>...`（在仓库目录下）
-   每篇打印一张卡片：来源、标题、作者、日期(来源)、刊/会(来源)、建议标题、PDF 是否拿到、全文 txt 路径、摘要，
-   以及是否与库里已有条目重复。下载暂存在仓库的 `inbox/<slug>.{json,pdf,txt}`（不进 git）；`save` 入库后三个文件自动删掉——PDF 由 Zotero 自己存一份在数据目录 `storage/<附件key>/`。
-   - 卡片报 `✗`：链接认不出或元数据取不到，告诉用户原因，让他换 arXiv/DOI 链接或直接给 PDF。
-     （OpenReview 的 API 常被人机验证挡住，脚本会退到 PDF 路线；项目页靠页面上的 PDF 链接 + arXiv 标题搜索认出来。）
-   - 报 `⚠ 重复`：**默认跳过**，汇报里说明库里已有哪条；用户明确说要再加才 `--force`。
+   ```
+   python3 zc.py add <链接…>
+   ```
 
-2. **读论文定标签**：不能只看标题。读摘要 + `grep -n -i "<关键词>" inbox/<slug>.txt` 查实验部分
-   （本体：UR5/Franka/ALOHA/dex hand/humanoid/gripper；输入：tactile/depth/point cloud/language；骨干：π0/GR00T；
-   机制：flow matching/diffusion/chunk/intervention/reasoning）。按 CLAUDE.md §3 的判定规则决定：
-   - 分类：`Evolution Algorithm` / `Dex-Manipulation` / `Humanoid` / `AI Foundation`，一篇一个；综述、或既做灵巧手又做人形全身的才 `--also` 加第二个。
-     Humanoid 放研究对象是人形本身的（全身控制/运动/人形遥操）；在人形上做操作的仍归 Dex-Manipulation + `embod:humanoid`；AI Foundation 只放纯 learning。
-   - `method:` 1–2 个；`embod:` `tech:` `base:` `modality:` 只标真正用到的，判不出留空；`type:` 综述/基准/数据集才贴。
-   - `status:` 不用写，脚本默认补 `status:to-read`（用户说"先看"就 `status:to-read-first`）。
-   - 词表外的新值不要私造：留空，汇报里写"建议新标签 xxx，理由"。
-   - **觉得这篇值得贴更多标签时（method / embod / tech / base / modality 里词表已有、但按规则又够不上"实质用到"的边缘情况），
-     先按规则贴，再在汇报里把候选标签和理由列出来和用户讨论**（例：策略吃 LiDAR 高度图，可否贴 `modality:point-cloud`）；
-     用户同意后 `python3 download.py tag <key> tag1,tag2` 经 Web API 补上（只增不减，日志自动记）。不要一边不确定一边先贴上。
+   脚本对每篇：抓元数据 + PDF + 全文 → 查重 → 自动定分类和标签（附证据）→ 经 Zotero 桌面端入库 → 等云端同步并核对 →
+   把日志 commit + push → 最后打印一张 `| key | 标题 | 分类 | 标签 | PDF | 备注 |` 的表。
 
-3. **核对标题前缀**：日期取 arXiv v1 提交日或期刊在线发表日，`YYYY-MMDD`；刊/会用缩写。
-   **用户下的是 arXiv 版但多半已中稿，标题要写会议/期刊，不写 `[arXiv]`；日期永远是 v1 提交日，中稿了也不动。**
-   脚本对 arXiv 条目自动查五层：arXiv comment/journal_ref → PDF 首页出版声明 → Semantic Scholar → Crossref（RSS/IEEE 有 DOI）
-   → 项目页/README（comment、摘要、PDF 首页里的链接；找 "Accepted to …" 或页头 "CoRL 2025" 徽章），
-   查到就直接填进"刊/会 ←"并注明证据；项目页写 under review / anonymous 会在 `default（…）` 里注明。
-   卡片仍是 `arXiv ← default` 且没有项目页信息时，可再做一次 WebSearch `"<论文原名>" accepted`，找到才 `--venue X` 并在备注写证据链接；
-   什么都没有就保留 `[arXiv]`，备注 "未查到录用信息"。不要凭印象填会议。
-   卡片里带 `⚠` 的来源（Crossref 不完整、OpenReview 日期、缩写表里没有的全名）要自己判断：
-   全名刊物查 `venues.py` 没有缩写的，按用户习惯造一个缩写（首字母大写）并在汇报里标出来。日期拿不到精确的能到哪写哪，不编造。
+2. 看输出，按情况处理（多数情况什么都不用做）：
+   - **正常入库**：扫一眼"贴"下面的证据行，明显贴错的（证据是相关工作/基线）`python3 zc.py untag <key> 标签 --why 原因`；其余不动。
+   - **候选**（脚本不贴、只列出的边缘标签）：写进汇报让用户定；证据明确够 CLAUDE.md 规则的可以直接 `python3 zc.py tag <key> a,b` 补上并在汇报里说明。
+   - **⏸ 分类拿不准**（Humanoid / Dex-Manipulation 边界，或 AI Foundation 但有机器人词）：读脚本打印的摘要定分类，
+     跑它给出的 `python3 zc.py save <slug> --collection "…" [--also "…"] [--tags …]`（可加 `--drop a,b` 去掉建议里的标签）。
+   - **⚠ 重复**：默认跳过，汇报里写库里已有哪条；用户明说要再加才 `--force`。
+   - **✗**：链接认不出或元数据取不到，把原因告诉用户，让他换 arXiv/DOI 链接、论文页或直接给 PDF。
+   - **刊/会仍是 `[arXiv] ← default`**：脚本已查过 arXiv comment / PDF 首页 / Semantic Scholar / Crossref / 项目页，不用再搜；备注写"未查到录用信息"。
+     用户点名要查时再 WebSearch，查到用 `python3 zc.py set <key> title="[日期] [会议] 原名"`。
+   - **同步 ⏳ 未确认**：Zotero 客户端还没把条目传上去，稍后 `python3 zc.py verify <key>`；不用轮询。
+   - 用户说"先看"：加 `--first`（status:to-read-first）。
 
-4. **入库**：`python3 download.py save <slug> --collection "<分类>" --tags a,b,c [--also "<分类>"] [--venue X] [--date YYYY-MMDD] [--url 项目页] [--short 短名]`
-   卡片里的"项目页"行是 URL 字段的默认值（没认出就用 arXiv 链接，候选里有像项目页的可 `--url` 指定）；"短名"是 Short Title 默认值（Notion 页面标题）。
-   脚本经 Zotero 桌面端 connector 接口建条目、贴标签、送 PDF，然后从本地库读回 key/分类/标签/PDF 路径打印出来。
-   报 "connector 23119 不通" 就是 Zotero 没开，让用户开了再说。`--also` 走 Web API，要等条目同步上去（最多 3 分钟）；
-   没等到会打印一条 `download.py collect <key> <分类>` 让稍后补。
+3. **汇报**：直接转述脚本打印的表（不要重新组织），表下面最多两三句：候选标签要不要补、⚠ 里需要用户定的事。
+   日志和 git 已由脚本处理，不用再写日志、不用再 commit。
 
-5. **汇报**：一张表 `| key | 标题 | 分类 | 标签 | PDF | 备注 |`，备注写拿不准的判断（embod 留空的原因、⚠ 的日期/刊名、
-   建议新标签、重复跳过）。日志脚本已自动追加到 `zotero-organize.log.md`，不用再写。
+## 其他命令
 
-## 存量复核
-
-用户说"查一下哪些 arXiv 的中稿了"：`python3 dump_zotero.py && python3 download.py recheck`（加 `--dates` 同时核对日期是否 v1 提交日；
-再加 `--search` 会给没有 arXiv 链接的条目按标题搜预印本，每条 3 秒，全库约 4 分钟）
-只列表不写；把表给用户（key | 现标题 | 建议 | 证据），批准后 `python3 download.py recheck [--dates] --write [--only K1,K2]`。
-对仍是 `[arXiv]` 的可再逐篇 WebSearch。改标题会连带改 PDF 文件名（见 CLAUDE.md §4），用户没改好模板前先提醒一句。
+- 只想看不入库：`python3 zc.py fetch <链接>`（完整卡片）→ `python3 zc.py suggest <slug>`（分类/标签建议）→ `python3 zc.py save <slug> …`。
+- 存量复核：`python3 zc.py dump && python3 zc.py recheck [--dates] [--search]`，只列表；批准后加 `--write`。
 
 ## 不要做的事
 
 - 不改 sqlite，不走 Web API 传 PDF（本机附件同步是 WebDAV，传了客户端也看不到）。
-- 不改用户已有条目的标题/标签，不新建分类。
+- 不改用户已有条目的标题/标签，不新建分类，不私造词表外的标签。
 - 不把 `.env` 里的 API key 打印出来。

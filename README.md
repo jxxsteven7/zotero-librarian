@@ -12,11 +12,11 @@
 git clone git@github.com:jxxsteven7/zotero-claude.git ~/zotero-claude
 cd ~/zotero-claude
 cp .env.example .env            # 填 ZOTERO_API_KEY；数据目录不填会自动探测（Linux/macOS 再 chmod 600 .env）
-./setup.sh                      # 体检：Python / .env / 数据目录 / pdftotext / HTTPS 证书 / Zotero 桌面端 / API key，缺什么给对应平台的命令
+./setup.sh                      # 体检：Python / .env / 数据目录 / pdftotext / HTTPS / Zotero 桌面端 / API key，缺什么给对应平台的命令
 claude                          # 在这个目录里开会话
 ```
 
-`./setup.sh` 只是挑一个 Python 去跑 `setup.py`；Windows 上（Claude Code 的 Bash 是 Git Bash）直接 `python setup.py` 也行。
+`./setup.sh` 只是挑一个 Python 去跑 `zc.py setup`；Windows 上（Claude Code 的 Bash 是 Git Bash）直接 `python zc.py setup` 也行。
 
 | 平台 | 装 pdftotext | 备注 |
 |---|---|---|
@@ -25,29 +25,31 @@ claude                          # 在这个目录里开会话
 | Windows | `winget install --id oschwartz10612.Poppler -e`（或 `scoop`/`choco install poppler`），装完重开终端 | 命令是 `python` 不是 `python3`；Zotero 数据目录默认 `C:\Users\你\Zotero`，`.env` 里直接写反斜杠路径 |
 | 任一平台 conda | `conda install -c conda-forge poppler` | 用哪个环境的 python 跑脚本，就会在那个环境里找 pdftotext |
 
-`.env`、`library_dump*.json`、`inbox/` 不进 git（凭据、库内容、论文全文），每台机器各有一份 `.env`。
+`.env`、`cache/`、`inbox/` 不进 git（凭据、库内容、论文全文），每台机器各有一份 `.env`。
 Zotero 端要在**每台机器**各做一次的只有一件事：设置里关 `automaticTags`（自动标签）。PDF 文件名模板是库的同步设置，一台设好全部生效。
 
 ## 日常
 
-- `/download <arXiv/DOI/PDF 链接或本地 PDF 路径>...` —— 收论文：下载、建条目、按规则命名、归类、贴标签，status 默认 `to-read`；URL 填项目页、Short Title 填短名，Notero 随即推到 Notion。
+所有命令一个入口：`python3 zc.py <命令>`（`--help` 列全部）。
+
+- `/download <链接…>` —— 在 Claude 里收论文，底下就是 `zc.py add <链接…>`：下载、查重、**自动**定分类贴标签（规则在 `zotero_claude/classify.py`，
+  附证据）、按规则命名、经 Zotero 桌面端入库、等云端同步核对、日志 commit+push、打印汇报表。分类拿不准会 ⏸ 停下让人定。
   需要 Zotero 桌面端开着（PDF 走它的本地 connector 接口，因为附件同步是 WebDAV）。
-- `python3 download.py recheck [--dates] [--search]` —— 复核库里 arXiv 条目：查中稿改 `[arXiv]` 为会议、核对日期是否 v1；看表批准后加 `--write`。
-- 存量批量整理（approval mode）：`dump_zotero.py` → 在 `proposal.py` 加行 → `apply.py --dry-run` / `--plan` → 批准后 `--apply`。
-- PDF 文件名被标题前缀污染了：Zotero → 工具 → 开发者 → Run JavaScript 跑 `fix_pdf_names.js`（先 DRY 看清单）。
+- 改一条：`zc.py verify <key>` / `tag <key> a,b` / `untag <key> a,b --why …` / `collect <key> <分类>` / `set <key> url=… shortTitle=…`（都记日志）。
+- `zc.py dump && zc.py recheck [--dates] [--search]` —— 复核库里 arXiv 条目：查中稿改 `[arXiv]` 为会议、核对日期是否 v1；看表批准后加 `--write`。
+- 存量批量整理（approval mode）：`zc.py dump` → 在 `proposals/proposal.py` 加行 → `zc.py proposal` → `zc.py apply --dry-run` / `--plan` → 批准后 `--apply`。
+- PDF 文件名被标题前缀污染了：Zotero → 工具 → 开发者 → Run JavaScript 跑 `tools/fix_pdf_names.js`（先 DRY 看清单）。
+- 调了 `classify.py` 的规则：`python3 tools/eval_classify.py` 用库里已核过标签的条目看精确率/召回率（`--errors` 逐条看）。
 
-## 文件
+## 布局
 
-| 文件 | 作用 |
-|---|---|
-| `CLAUDE.md` | 唯一规则来源 |
-| `.claude/skills/download/` | `/download` skill（项目级） |
-| `download.py` | 收论文脚本：fetch / save / collect / recheck |
-| `venues.py` | 刊/会名 → 缩写表 |
-| `dump_zotero.py` | 只读导出全库 → `library_dump.json` |
-| `apply.py` + `proposal.py` | 批量整理：提案表 → Web API 写入 |
-| `config.py` | 读 `.env`；探测 Zotero 数据目录和 pdftotext；三平台差异都收在这里 |
-| `setup.py` / `setup.sh` | 新机器体检 |
-| `fix_pdf_names.js` | Zotero Run JavaScript：把带前缀的 PDF 文件名改回模板格式 |
-| `notero.md` | Zotero → Notion 镜像（Notero 插件）的现行配置和日常规则 |
-| `zotero-organize.log.md` | 所有写入的审计日志 |
+```
+zc.py                       命令行入口
+zotero_claude/              代码包：config vocab venues classify pipeline fetch sources pdf published titles connector zapi localdb batch recheck setup_check cli
+proposals/proposal.py       批量整理的提案数据
+docs/notero.md              Zotero → Notion 镜像（Notero 插件）的现行配置和日常规则
+logs/zotero-organize.log.md 所有写入的审计日志
+tools/                      fix_pdf_names.js（Zotero 内跑）、eval_classify.py（评估分类规则）
+.claude/skills/download/    /download skill
+inbox/ cache/               抓取暂存、dump 与全文缓存（不进 git）
+```

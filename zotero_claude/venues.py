@@ -1,4 +1,4 @@
-"""刊/会名称 → 用户风格缩写。download.py 用；新增缩写只改这里。"""
+"""刊/会名称 → 用户风格缩写。sources.py / published.py 用；新增缩写只改这里。"""
 import re
 
 VENUE_ABBR = {  # 期刊/会议全名(小写) -> 缩写

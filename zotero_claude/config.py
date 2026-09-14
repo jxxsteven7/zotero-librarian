@@ -1,5 +1,11 @@
-"""本机配置：全部来自同目录 .env（不进 git）。其他脚本只从这里拿路径、凭据和外部程序。
+"""本机配置与仓库路径：凭据来自仓库根目录的 .env（不进 git）。其他模块只从这里拿路径、凭据和外部程序。
 Ubuntu / macOS / Windows 三个平台通用，只用标准库。
+
+仓库布局（ROOT = 本文件所在包的上一级）：
+  inbox/                    fetch 的暂存区（json/pdf/txt），入库后自动清空，不进 git
+  cache/library_dump.json   dump 的输出（库内容），不进 git
+  logs/zotero-organize.log.md   所有写入的审计日志，进 git
+  proposals/proposal.py     批量整理（approval mode）的提案数据
 
 .env 支持的键（KEY=VALUE 一行一个；也兼容整个文件只写一个裸 API key）：
   ZOTERO_API_KEY     Zotero Web API key（zotero.org/settings/keys，需个人库读写 + 文件权限）
@@ -12,7 +18,14 @@ import glob, os, re, shutil, sys
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(HERE, ".env")
+ROOT = os.path.dirname(HERE)                                   # 仓库根目录
+ENV_PATH = os.path.join(ROOT, ".env")
+INBOX = os.path.join(ROOT, "inbox")
+CACHE = os.path.join(ROOT, "cache")
+DUMP = os.path.join(CACHE, "library_dump.json")
+LOG = os.path.join(ROOT, "logs", "zotero-organize.log.md")
+PROPOSAL_PY = os.path.join(ROOT, "proposals", "proposal.py")
+PROPOSAL_MD = os.path.join(ROOT, "proposals", "proposal.md")
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 
@@ -90,7 +103,7 @@ def connect_ro(path=None):
 
 # ---------- pdftotext ----------
 def find_pdftotext(explicit=None):
-    """返回 pdftotext 可执行文件路径；找不到返回 None（download.py 会退到 pypdf）。"""
+    """返回 pdftotext 可执行文件路径；找不到返回 None（pdf.py 会退到 pypdf）。"""
     exe = "pdftotext.exe" if IS_WIN else "pdftotext"
     cands = [explicit] if explicit else []
     cands.append(shutil.which("pdftotext"))
