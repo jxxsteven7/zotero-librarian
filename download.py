@@ -104,19 +104,52 @@ def clean_title(t):
     return ws(re.sub(r"\$([^$]*)\$", lambda m: re.sub(r"[_^{}$\\]", "", m.group(1)), t or ""))
 
 
-def meta_arxiv(aid):
+def meta_arxiv_api(aid):
     ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
     xml = get_text(f"https://export.arxiv.org/api/query?id_list={aid}")
     e = ET.fromstring(xml).find("a:entry", ns)
     if e is None or e.find("a:title", ns) is None or "Error" in (e.findtext("a:title", "", ns)): raise RuntimeError("arXiv API 没找到 " + aid)
     idurl = e.findtext("a:id", "", ns); ver = re.search(r"v(\d+)$", idurl)
     cat = e.find("x:primary_category", ns); cat = cat.get("term") if cat is not None else ""
-    m = dict(source="arxiv", id=aid, url=f"http://arxiv.org/abs/{aid}", title=clean_title(e.findtext("a:title", "", ns)),
-             authors=[split_name(a.findtext("a:name", "", ns)) for a in e.findall("a:author", ns)],
-             abstract=ws(e.findtext("a:summary", "", ns)), published=e.findtext("a:published", "", ns)[:10],
-             updated=e.findtext("a:updated", "", ns)[:10], version=int(ver.group(1)) if ver else 1,
-             comment=ws(e.findtext("x:comment", "", ns)), journal_ref=ws(e.findtext("x:journal_ref", "", ns)),
-             doi=e.findtext("x:doi", "", ns), category=cat, pdf_url=f"https://arxiv.org/pdf/{aid}")
+    return dict(title=clean_title(e.findtext("a:title", "", ns)),
+                authors=[split_name(a.findtext("a:name", "", ns)) for a in e.findall("a:author", ns)],
+                abstract=ws(e.findtext("a:summary", "", ns)), published=e.findtext("a:published", "", ns)[:10],
+                updated=e.findtext("a:updated", "", ns)[:10], version=int(ver.group(1)) if ver else 1,
+                comment=ws(e.findtext("x:comment", "", ns)), journal_ref=ws(e.findtext("x:journal_ref", "", ns)),
+                doi=e.findtext("x:doi", "", ns), category=cat)
+
+
+def meta_arxiv_html(aid):
+    """export.arxiv.org 被限流（429/503，校园网共用出口 IP 常见）时改抓 arxiv.org/abs 页面：
+    citation_* meta 给标题/作者/摘要/v1 日期，Submission history 给版本号，表格给 comment / journal-ref / 主分类。"""
+    h = get_text(f"https://arxiv.org/abs/{aid}")
+    metas = re.findall(r'<meta name="citation_(\w+)" content="([^"]*)"', h)
+    def meta(k): return [html.unescape(v) for n, v in metas if n == k]
+    if not meta("title"): raise RuntimeError("arXiv abs 页面没找到 " + aid)
+    def cell(cls, label=None):
+        pat = (re.escape(label) + r"</td>\s*" if label else "") + r'<td class="tablecell ' + cls + r'[^"]*">(.*?)</td>'
+        m = re.search(pat, h, re.S)
+        if not m: return ""
+        t = re.sub(r'<a href="([^"]+)"[^>]*>this https? URL</a>', r"\1", m.group(1))  # 页面把链接文字换成了 "this https URL"，还原成 URL
+        return ws(html.unescape(re.sub(r"<[^>]+>", " ", t)))
+    vers = re.findall(r"<strong>(?:<a[^>]*>)?\[v(\d+)\]", h)
+    cat = re.search(r'<span class="primary-subject">[^(]*\(([^)]+)\)', h)
+    return dict(title=clean_title(meta("title")[0]),
+                authors=[split_name(" ".join(reversed(a.split(", ", 1)))) for a in meta("author")],
+                abstract=ws(re.sub(r"<[^>]+>", " ", (meta("abstract") or [""])[0])),
+                published=(meta("date") or [""])[0].replace("/", "-"), updated=(meta("online_date") or [""])[0].replace("/", "-"),
+                version=max(map(int, vers)) if vers else 1, comment=cell("comments"),
+                journal_ref=cell("jref", "Journal&nbsp;reference:"), doi=(meta("doi") or [""])[0], category=cat.group(1) if cat else "")
+
+
+def meta_arxiv(aid):
+    try:
+        m = meta_arxiv_api(aid)
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        print(f"  ⚠ arXiv API {getattr(e, 'code', e)}，改抓 abs 页面", file=sys.stderr)
+        m = meta_arxiv_html(aid)
+    cat = m["category"]
+    m.update(source="arxiv", id=aid, url=f"http://arxiv.org/abs/{aid}", pdf_url=f"https://arxiv.org/pdf/{aid}")
     m["date"], m["date_src"] = m["published"], "arxiv:v1"
     v = venue_from_context(m["comment"] + " " + m["journal_ref"])
     m["venue"], m["venue_src"] = (v, "arxiv-comment") if v else ("arXiv", "default")
