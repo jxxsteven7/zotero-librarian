@@ -23,18 +23,19 @@ Notion 里凡是 Notero 管的字段（标题、Tags、URL、Collections）改�
 
 ```
 Paper Reading                      (页面)
-└── All Papers                     (内嵌数据库，Notero 唯一写入目标；三个视图 tab：Dex-Manipulation | Humanoid | AI Foundation，
+└── Zotero Papers                  (内嵌数据库，原名 All Papers，用户已改名；Notero 唯一写入目标；三个视图 tab：Dex-Manipulation | Humanoid | AI Foundation，
                                     各按 Collections contains <分类名> 过滤，Collections 列在视图里隐藏)
 ```
 
-`All Papers` 属性（名字类型一字不差，Notero 只填它认识的；自己想加的属性随便加，Notero 不碰）：
+`Zotero Papers` 属性（**名字类型一字不差，大小写敏感，不能改名**——Notero 只按固定名字写，改名了它就当这列不存在、静默不填；
+自定义属性名是 Notero 未实现的功能 #355。自己想加的属性随便加，Notero 不碰）：
 
 | 属性 | 类型 | 内容 |
 |---|---|---|
 | `Name` | Title | Zotero Short Title（论文短名） |
 | `Collections` | Multi-select | Zotero 分类名；只用于视图过滤，各视图里隐藏 |
 | `Tags` | Multi-select | Zotero 全部标签；颜色按家族配好（`method:` `embod:` `tech:` `base:` `modality:` `type:` `status:` 各一色），Notero 不改颜色，新标签出现是随机色要手配。库里还没人贴的值（如 `status:read`）可以先在 Notion 手建选项配好色，之后 Notero 按名字匹配、颜色保留 |
-| `URL` | URL | Zotero URL 字段 = 项目页 |
+| `URL` | URL | Zotero URL 字段 = 项目页。**列名必须就叫 `URL`**：2026-09-14 发现用户把它改成了 `Project URL`，Notero 从此不再填，81 篇里 78 篇空着；已改回，需对三个分类各右键一次 Sync Items to Notion 回填 |
 | `Zotero URI` | URL | 点开 zotero.org 网页库里的这条（回 Zotero 的入口） |
 
 没有 `Date Added`（删了）。**Sync notes 关**（2026-09-12 用户定）：Notion 页面正文完全归用户，Notero 不写正文。开着时它只维护页面里一个 "Zotero Notes" 折叠块（Zotero 笔记的只读镜像，折叠块以外从不碰）；关掉后已有的折叠块留在页面上不再更新，可手动删。
@@ -46,4 +47,6 @@ Notero 认识的其他属性（`DOI` `Year` `Authors` `Abstract` `Publication` �
 2. 笔记写 Notion 页面正文。
 3. 改显示名 → Zotero Short Title；改链接 → Zotero URL；改标签/分类/进度 → Zotero。Notion 里别动这四列。
 4. 跳转：Zotero 条目下双击 `Notion` 附件 → 浏览器打开页面（可"在应用中打开"）；Notion 里点 `Zotero URI` → 网页库。
-5. 删了 Notion 页面又想重推：先删条目上的 `Notion` 附件再对条目右键 Sync to Notion。
+   项目页：Zotero 条目面板的 URL 字段右侧有 ↗ 按钮直接打开（阅读 PDF 时右侧栏"信息"里也有）；Notion 的 `URL` 列就是它。
+5. **Notion 里某列一直空着 → 先看列名是不是被改过**（Notero 认死名字）。改回来后要对分类右键 Sync Items to Notion 才回填（Notero 只在条目改动时推）。
+6. 删了 Notion 页面又想重推：先删条目上的 `Notion` 附件再对条目右键 Sync to Notion。
