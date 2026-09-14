@@ -8,25 +8,30 @@ saves it through your running Zotero, waits for the cloud sync, writes an audit 
 config file; a local model (Ollama) does the borderline calls; the agent only reads the report.
 
 ```
-$ python3 zc.py add https://arxiv.org/abs/2505.03729
-=== 2505.03729  (arxiv: 2505.03729)
-  title     : [2025-0506] [CoRL] Visual Imitation Enables Contextual Humanoid Control   short: VideoMimic
-  date      : 2025-05-06 <- arxiv:v1   venue: CoRL <- pdf: 9th Conference on Robot Learning (CoRL 2025), Seoul, Korea.
-  URL       : https://videomimic.net
-  collection: Humanoid
-  assign    : method:rl, embod:humanoid, modality:point-cloud
-      method:rl                <- body x14: ...retarget the motion to a humanoid, and train an RL policy to track the reference trajectories...
-      embod:humanoid           <- title: ...Visual Imitation Enables Contextual Humanoid Control...
-      modality:point-cloud     <- body x12: ...along with aligned scene point clouds in the world coordinate frame...
+$ python3 zc.py add https://arxiv.org/abs/2607.11481
+=== 2607.11481  (arxiv: 2607.11481)
+  title     : [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation   short: TeleDexter
+  authors   : Puhao Li, Zeyuan Chen, Yingying Wu ...
+  date      : 2026-07-13 <- arxiv:v1   venue: arXiv <- default
+  URL       : https://bigai-dex.github.io/blog/teledexter/
+  PDF       : ok <- https://arxiv.org/pdf/2607.11481
+  collection: Dex-Manipulation
+  assign    : method:teleop, method:rl, embod:dex-hand, embod:single-arm
+      method:teleop            <- title: ...Towards Human-level Dexterous Teleoperation...
+      method:rl                <- abstract: ...The entire pipeline requires only single-stage RL and, with random action masking and domain randomization, transfers zero-shot...
+      embod:dex-hand           <- abstract: ...long-horizon tool use across two dexterous hands, achieving a 75% average success rate...
+      embod:single-arm         <- body x2: ...All real-world experiments are conducted on a Franka FR3 arm equipped with a dexterous robot hand...
   candidates: (not assigned — discuss with the user)
-      method:teleop            6 weighted body hits, not in the abstract — could be related work or a baseline
-  model     : qwen3.5:9b (confidence 0.95) — VideoMimic retargets human video to a Unitree G1 and trains whole-body control with RL.
-  sync      : ok server v3589 | collections ['Humanoid'] | tags ['embod:humanoid', 'method:rl', 'modality:point-cloud', 'status:to-read']
+      modality:vision          6 weighted body hits, not in the abstract — could be related work or a baseline — the model agrees it applies
+      method:policy-learning   at most 2 method tags; this ranked #3
+  model     : qwen3.5:9b (confidence 1.0) — The paper introduces a teleoperation system for dexterous hands trained via RL, deployed on a single-arm setup.
+saved U3HFYV4Q | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation
+  sync      : ok server v3540 | collections ['Dex-Manipulation'] | tags ['embod:dex-hand', 'embod:single-arm', 'method:rl', 'method:teleop', 'status:to-read']
   git       : committed and pushed
 
 | key | title | collection | tags | PDF | notes |
 |---|---|---|---|---|---|
-| `DAPCL92Q` | [2025-0506] [CoRL] Visual Imitation Enables Contextual Humanoid Control | Humanoid | method:rl, embod:humanoid, modality:point-cloud, status:to-read | yes | sync ok. candidates: `method:teleop` (...) |
+| `U3HFYV4Q` | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation | Dex-Manipulation | method:teleop, method:rl, embod:dex-hand, embod:single-arm, status:to-read | yes | sync ok. candidates: `modality:vision` (...), `method:policy-learning` (...) |
 ```
 
 ## What it does
