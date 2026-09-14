@@ -1,6 +1,6 @@
-# 凭据
+# credentials
 .env
-# 本机生成物（可再生；含库内容/笔记/论文全文，不进 git）
+# generated locally (library content, full texts, staged downloads) — never committed
 cache/
 inbox/
 proposals/proposal.md

@@ -1,35 +1,38 @@
-"""本机配置与仓库路径：凭据来自仓库根目录的 .env（不进 git）。其他模块只从这里拿路径、凭据和外部程序。
-Ubuntu / macOS / Windows 三个平台通用，只用标准库。
+"""Machine configuration and repository paths. Credentials come from the repo-root .env (not in git); other modules
+take paths, credentials and external programs only from here. Ubuntu / macOS / Windows, standard library only.
 
-仓库布局（ROOT = 本文件所在包的上一级）：
-  inbox/                    fetch 的暂存区（json/pdf/txt），入库后自动清空，不进 git
-  cache/library_dump.json   dump 的输出（库内容），不进 git
-  logs/zotero-organize.log.md   所有写入的审计日志，进 git
-  proposals/proposal.py     批量整理（approval mode）的提案数据
+Layout (ROOT = the parent of this package):
+  taxonomy.toml                  collections, tag vocabulary, classification rules, venue abbreviations
+  inbox/                         fetch staging area (json/pdf/txt), cleared after saving, not in git
+  cache/library_dump.json        library snapshot from `zc.py dump`, not in git
+  logs/zotero-organize.log.md    audit log of every write, in git
+  proposals/proposal.py          approval-mode batch data
 
-.env 支持的键（KEY=VALUE 一行一个；也兼容整个文件只写一个裸 API key）：
-  ZOTERO_API_KEY     Zotero Web API key（zotero.org/settings/keys，需个人库读写 + 文件权限）
-  ZOTERO_LIBRARY_ID  用户库 ID，默认 14568484
-  ZOTERO_DATA_DIR    Zotero 数据目录。不写就自动从 Zotero 的 prefs.js 里读 extensions.zotero.dataDir，
-                     再不行用各平台默认（Linux/macOS ~/Zotero，Windows %USERPROFILE%\\Zotero）
-  PDFTOTEXT          pdftotext 可执行文件路径。不写就在 PATH 和常见安装位置里找
+.env keys (KEY=VALUE per line; a file holding just the bare API key also works):
+  ZOTERO_API_KEY     Zotero Web API key (zotero.org/settings/keys; personal library read/write + file access)
+  ZOTERO_LIBRARY_ID  your user library id (zotero.org/settings/keys shows it)
+  ZOTERO_DATA_DIR    Zotero data directory; if unset, read from Zotero's prefs.js (extensions.zotero.dataDir),
+                     else the platform default (~/Zotero, Windows %USERPROFILE%\\Zotero)
+  PDFTOTEXT          path to the pdftotext executable; if unset, searched on PATH and common install locations
+  ZC_LLM / ZC_LLM_MODEL / ZC_LLM_URL / ZC_LLM_KEY   local model for classification (see llm.py)
 """
 import glob, os, re, shutil, sys
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                                   # 仓库根目录
+ROOT = os.path.dirname(HERE)                                   # repository root
 ENV_PATH = os.path.join(ROOT, ".env")
 INBOX = os.path.join(ROOT, "inbox")
 CACHE = os.path.join(ROOT, "cache")
 DUMP = os.path.join(CACHE, "library_dump.json")
 LOG = os.path.join(ROOT, "logs", "zotero-organize.log.md")
 PROPOSAL_PY = os.path.join(ROOT, "proposals", "proposal.py")
+TAXONOMY_PATH = os.path.join(ROOT, "taxonomy.toml")
 PROPOSAL_MD = os.path.join(ROOT, "proposals", "proposal.md")
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 
-# Windows 上 stdout 被管道接走时默认是本地代码页（GBK），打印 ✓ ⚠ − 会直接 UnicodeEncodeError；统一成 UTF-8
+# on Windows a piped stdout defaults to the local code page; printing non-ASCII would raise — force UTF-8
 for _s in (sys.stdout, sys.stderr):
     if _s and hasattr(_s, "reconfigure") and (_s.encoding or "").lower().replace("-", "") != "utf8":
         _s.reconfigure(encoding="utf-8", errors="replace")
@@ -44,14 +47,14 @@ def load_env():
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1); env[k.strip()] = v.strip().strip('"').strip("'")
         if "ZOTERO_API_KEY" not in env and re.fullmatch(r"[A-Za-z0-9]{20,40}", raw.strip()):
-            env["ZOTERO_API_KEY"] = raw.strip()   # 允许只写裸 key
-    env.setdefault("ZOTERO_LIBRARY_ID", "14568484")
+            env["ZOTERO_API_KEY"] = raw.strip()   # a bare key on its own is accepted
+    env.setdefault("ZOTERO_LIBRARY_ID", "")
     return env
 
 
-# ---------- Zotero 数据目录 ----------
+# ---------- Zotero data directory ----------
 def zotero_profile_prefs():
-    """各平台 Zotero 配置文件 prefs.js 的候选路径（存在的）。"""
+    """Existing prefs.js candidates for each platform's Zotero profile."""
     if IS_WIN: pats = [os.path.join(os.environ.get("APPDATA", ""), "Zotero", "Zotero", "Profiles", "*", "prefs.js")]
     elif IS_MAC: pats = [os.path.expanduser("~/Library/Application Support/Zotero/Profiles/*/prefs.js")]
     else: pats = [os.path.expanduser("~/.zotero/zotero/*/prefs.js"), os.path.expanduser("~/snap/zotero-snap/common/Zotero/*/prefs.js")]
@@ -65,7 +68,7 @@ def data_dir_from_prefs():
         except OSError: continue
         m = re.search(r'user_pref\("extensions\.zotero\.dataDir",\s*"((?:[^"\\]|\\.)*)"\)', s)
         if m:
-            d = re.sub(r"\\u([0-9a-fA-F]{4})", lambda u: chr(int(u.group(1), 16)), m.group(1))   # prefs.js 里 Windows 路径写成 C:\\Users\\…
+            d = re.sub(r"\\u([0-9a-fA-F]{4})", lambda u: chr(int(u.group(1), 16)), m.group(1))   # prefs.js escapes Windows paths as C:\\Users\\...
             d = re.sub(r"\\(.)", r"\1", d)
             if os.path.isdir(d): return d
     return None
@@ -76,15 +79,16 @@ def default_data_dir():
 
 
 def sqlite_ro_uri(path):
-    """只读 + immutable 打开的 sqlite URI。Windows 路径要写成 file:///C:/…，Path.as_uri() 三个平台都对。"""
+    """sqlite URI for read-only immutable access; Path.as_uri() produces file:///C:/... correctly on every platform."""
     return Path(path).resolve().as_uri() + "?mode=ro&immutable=1"
 
 
 def connect_ro(path=None):
-    """只读打开 Zotero 库，Zotero 运行中也能用。
-    Zotero 10 起数据库是 WAL 模式（zotero.sqlite-wal），immutable 只读主文件会看到旧数据；而普通只读打开又被 Zotero 的
-    exclusive 锁挡住（database is locked）。所以有 WAL 时把主文件 + WAL 拷到临时目录再打开拷贝，SQLite 自己把 WAL 应用上去。
-    拷贝前后核对两个文件的 mtime/size 没变才算一致快照，变了就重拷。"""
+    """Open the Zotero database read-only, even while Zotero is running.
+    Since Zotero 10 the database is in WAL mode (zotero.sqlite-wal): an immutable open of the main file sees stale data,
+    and a normal read-only open hits Zotero's exclusive lock. So when a WAL exists, copy main file + WAL to a temporary
+    directory and open the copy — SQLite applies the WAL itself. The copy is retried until mtime/size are unchanged
+    before and after, i.e. a consistent snapshot."""
     import shutil, sqlite3, tempfile, atexit
     path = path or DB
     wal = path + "-wal"
@@ -103,11 +107,11 @@ def connect_ro(path=None):
 
 # ---------- pdftotext ----------
 def find_pdftotext(explicit=None):
-    """返回 pdftotext 可执行文件路径；找不到返回 None（pdf.py 会退到 pypdf）。"""
+    """Path of the pdftotext executable, or None (pdf.py then falls back to pypdf)."""
     exe = "pdftotext.exe" if IS_WIN else "pdftotext"
     cands = [explicit] if explicit else []
     cands.append(shutil.which("pdftotext"))
-    # conda（当前解释器所在环境）：Windows 装在 Library\bin，Linux/macOS 在 bin
+    # conda (the running interpreter's environment): Library\bin on Windows, bin elsewhere
     cands += [os.path.join(sys.prefix, "Library", "bin", exe), os.path.join(sys.prefix, "bin", exe)]
     if IS_WIN:
         cands += glob.glob(r"C:\Program Files\poppler*\Library\bin\pdftotext.exe") + glob.glob(r"C:\poppler*\Library\bin\pdftotext.exe") \
@@ -127,9 +131,9 @@ def find_pdftotext(explicit=None):
 
 
 PDFTOTEXT_INSTALL = ("Ubuntu: sudo apt install poppler-utils   macOS: brew install poppler   "
-                     "Windows: winget install --id oschwartz10612.Poppler -e（或 scoop/choco install poppler；装完重开终端）   "
-                     "任一平台的 conda 环境: conda install -c conda-forge poppler；"
-                     "都不想装就 pip install pypdf（纯 Python 退路，抽文本质量略差）")
+                     "Windows: winget install --id oschwartz10612.Poppler -e (or scoop/choco install poppler; reopen the terminal)   "
+                     "any conda environment: conda install -c conda-forge poppler; "
+                     "or pip install pypdf (pure-Python fallback, slightly worse text)")
 
 _env = load_env()
 DATA_DIR = os.path.expanduser(_env.get("ZOTERO_DATA_DIR") or data_dir_from_prefs() or default_data_dir())

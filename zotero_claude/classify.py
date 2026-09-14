@@ -1,232 +1,232 @@
-"""规则式自动分类 + 贴标签（CLAUDE.md §2 分类、§3 词表的判定规则写成代码；证据来自标题 + 摘要 + 正文）。
+"""Rule-based classifier: turns taxonomy.toml patterns into evidence-backed collection / tag suggestions.
 
-    suggest(title, abstract, text) -> dict(collection, also, sure, maybe, flags, evidence)
+    suggest(title, abstract, text) -> dict(collection, also, sure, maybe, flags, evidence, scores)
 
-三档输出：
-  sure  —— 按规则够得上"实质用到"，`zc.py add` 直接贴
-  maybe —— 边缘候选（只在正文零星出现、或被排他规则压下去的），不贴，汇报里列给用户讨论后 `zc.py tag` 补
-  flags —— 需要人看一眼的提示（分类边界、embod 判不出、没有正文只靠摘要…）
-判定原则：标题/摘要里出现 = 论文自己说的，可信；正文里要出现够多次（相关工作/基线里提一嘴通常只有几次）。
-阈值是拿库里 129 篇已人工核过标签的条目调出来的（tools/eval_classify.py），改规则后重跑看精确率。
-参考文献段先切掉，否则引用的 "Diffusion Policy" "ALOHA" 全会误命中。
+Three output tiers:
+  sure  — meets the "substantively used" bar; `zc.py add` assigns these directly
+  maybe — borderline (few body mentions, or suppressed by an exclusion rule); listed for the user, not assigned
+  flags — things a human should glance at (collection boundary, no embodiment found, abstract-only judgement...)
+Principles: a title/abstract mention is the paper speaking for itself; body mentions must be frequent (related work and
+baselines mention everything once or twice). The reference list is cut first, otherwise every cited "Diffusion Policy" hits.
+Thresholds were tuned on the library's own reviewed items (tools/eval_classify.py); re-run it after editing the rules.
+The LLM classifier (llm.py) consumes the evidence this module extracts, so keep the patterns broad and the thresholds strict.
 """
 import re
-from .vocab import EA, DM, HUM, AIF
 
-# ---- 每个标签：pats = [(regex, 权重)]；sure = 正文命中数够这个就贴；maybe = 够这个就列为候选；
-#      head = 标题/摘要里出现是否直接算 sure（False 的标签光摘要提到不够，比如 teleop 常是"用遥操收数据"而非贡献）
-T = lambda pats, sure, maybe=1, head=True: dict(pats=pats, sure=sure, maybe=maybe, head=head)
-RULES = {
- # method
- "method:vla": T([(r"vision[- ]language[- ]action", 2), (r"\bVLAs?\b", 2), (r"\bOpenVLA\b|\bRT-2\b|\bGR00T\b|\bSmolVLA\b", 1)], sure=20, maybe=6),
- "method:policy-learning": T([(r"imitation learning|behaviou?r(al)? cloning|learning from (human )?demonstrations?", 2),
-                              (r"diffusion polic(y|ies)|action chunking transformer|visuomotor polic(y|ies)", 1)], sure=20, maybe=4),
- "method:rl": T([(r"reinforcement learning|\bRL\b", 2), (r"\bPPO\b|reward (function|design|shaping)|policy gradient|actor[- ]critic", 1)], sure=24, maybe=6),
- "method:world-model": T([(r"world[- ](action[- ])?models?", 2), (r"(learned |neural )?dynamics model|video prediction|model-based (RL|reinforcement|planning)|imagin(ed|ation) rollouts?", 1)], sure=999, maybe=6),
- "method:foundation-model": T([(r"foundation models?", 2), (r"vision[- ]language models?|\bVLMs?\b|large language models?|\bLLMs?\b|pre-?trained (backbone|encoder|representation)s?|self-supervised (pre-?training|learning)|representation learning", 1)], sure=999, maybe=8),
- "method:teleop": T([(r"teleoperat", 2), (r"retarget|data ?gloves?|exoskeleton|motion capture|\bmocap\b|VR (headset|controller)|Apple Vision Pro|Meta Quest|hand tracking", 1)], sure=999, maybe=8, head=False),
- "method:grasp-synthesis": T([(r"grasp (synthesis|generation)|dexterous grasp(ing|s)?\b", 2), (r"grasp (pose|sampling|detection|proposal)s?|grasp candidates", 1)], sure=999, maybe=6),
- # embod（硬件名在正文里出现够多 = 真用了；只出现几次多半是相关工作/基线）
- "embod:dex-hand": T([(r"dexterous hands?|multi-?finger(ed)? hands?|five-?finger(ed)? hands?|anthropomorphic hands?|robot(ic)? hands?", 2),
-                      (r"\bAllegro\b|\bLEAP hand|\bShadow hand|\bInspire\b|\bXHand\b|\bSharpa\b|\bAbility hand|\bDClaw\b|\bLinkerHand|\bWuji\b|\bTesollo\b|\bRobotEra\b|\bDexHand\b|\bBrainCo\b|\bMANO\b|\bDLR hand", 2)], sure=8, maybe=2),
- "embod:gripper": T([(r"parallel[- ]jaw|\bRobotiq\b|2F-85|Franka hand|two-finger grippers?|suction cup", 2), (r"\bgrippers?\b", 1)], sure=10, maybe=3),
- "embod:single-arm": T([(r"single[- ]arm", 2), (r"\bFranka\b|\bPanda\b|\bUR ?5e?\b|\bUR ?10e?\b|\bUR ?7e\b|\bUR ?3e?\b|\bxArm\b|\bKinova\b|\bKUKA\b|\biiwa\b|\bWidowX\b|\bFlexiv\b|\bRizon\b|\bRealMan\b|\bRM-65\b|\bSawyer\b|\bJaco\b|\bPiper\b|\bSO-?10[01]\b|\bKoch\b|\bViperX\b|\b7-DoF arm", 2), (r"robot(ic)? arms?", 1)], sure=6, maybe=2),
- "embod:bimanual": T([(r"bimanual|dual[- ]arm|two[- ]arm(ed|s)?|both arms|two robot hands|two[- ]handed", 2), (r"\bALOHA\b|Mobile ALOHA|\bAgileX\b|\bARX\b|\bBiPi\b", 2)], sure=10, maybe=3),
- "embod:humanoid": T([(r"humanoid robots?|humanoids?\b(?=[^.]{0,40}(robot|control|whole[- ]body|locomotion|loco|polic|platform|teleop|hardware))", 2),
-                      (r"\bUnitree (G1|H1)|\bFourier (GR|N1)|\bBooster T1|\bTienKung|\bTien Kung|\bGalaxea R1|\bDexmate\b|\bFigure 0[12]|\bEngineAI\b|\bAgiBot\b|\bBerkeley Humanoid|\bG1 humanoid|\bH1 humanoid", 2)], sure=12, maybe=3),
- # tech（transformer / diffusion 谁都提，只认论文自己说的或正文大量出现）
- "tech:action-chunking": T([(r"action[- ]chunk(ing|s|ed)?|chunked actions?|temporal ensembl", 2)], sure=6, maybe=2),
- "tech:flow-matching": T([(r"flow[- ]matching|rectified flow|conditional flow", 2)], sure=6, maybe=2),
- "tech:diffusion": T([(r"diffusion (polic(y|ies)|models?|transformers?|process|head|decoder)|denoising|\bDDPM\b|\bDDIM\b|score[- ]based", 2)], sure=999, maybe=15),
- "tech:transformer": T([(r"transformer(-based| encoder| decoder| backbone| polic(y|ies)| architecture)|\bViT\b|vision transformer", 2), (r"\btransformers?\b|self-attention|cross-attention", 1)], sure=15, maybe=6),
- "tech:hil": T([(r"human[- ]in[- ]the[- ]loop|human (intervention|correction)s?|interactive imitation|\bHG-DAgger|intervention data|human feedback during", 2)], sure=30, maybe=3),
- "tech:latent-cot": T([(r"chain[- ]of[- ]thought|\bCoT\b|embodied reasoning|latent reasoning|reasoning (tokens|traces|steps)|think(ing)? before act|subtask prediction", 2)], sure=999, maybe=5),
- # base（还要有微调/冻结语境，见 BASE_CTX；标题里就是这个模型 = 论文提出的就是它，不贴）
- "base:pi0": T([(r"\bπ0\b|\bπ_?0\b(?![.\d])|\bpi[_-]?0\b(?![.\d])|\bpi-zero\b", 2)], sure=999, maybe=1, head=False),
- "base:pi0.5": T([(r"π_?0\.5|pi[_-]?0\.5", 2)], sure=999, maybe=1, head=False),
- "base:pi0.6": T([(r"π_?0\.6|pi[_-]?0\.6", 2)], sure=999, maybe=1, head=False),
- "base:gr00t": T([(r"\bGR00T\b|\bGROOT\b", 2)], sure=999, maybe=1, head=False),
- # modality（只标策略真正消费的输入；VLA 一律 vision+language，见下）
- "modality:vision": T([(r"\bRGB\b|wrist cameras?|camera images?|image observations?|visual observations?|visual inputs?|from (raw )?pixels|monocular|stereo cameras?|\bcameras?\b|egocentric|visuomotor", 2)], sure=25, maybe=6),
- "modality:language": T([(r"language[- ]conditioned|language instructions?|text instructions?|natural language (commands?|instructions?|goals?)|instruction[- ]following|language goals?|free-form language|language prompts?", 2), (r"\binstructions?\b", 1)], sure=30, maybe=8),
- "modality:tactile": T([(r"tactile", 2), (r"\bGelSight\b|\bFSR\b|force[- ]torque|\bF/T sensor|contact (force|sensing|sensors?)|touch sens", 1)], sure=25, maybe=5),
- "modality:depth": T([(r"depth (images?|maps?|cameras?|observations?|sensors?)|\bRGB-?D\b", 2)], sure=40, maybe=5),
- "modality:point-cloud": T([(r"point[- ]clouds?", 2), (r"\bLiDAR\b", 1)], sure=20, maybe=5),
- "modality:audio": T([(r"\baudio\b|microphones?|acoustic", 2)], sure=999, maybe=5),
-}
-BASE_CTX = r"fine-?tun\w*|finetun\w*|initializ\w*|built (up)?on|post-?train\w*|fr(eez|ozen)\w*|starting from|adapt\w*|checkpoints?|pre-?trained weights|as (our|the) (base|backbone|initialization)"
-# 分类判定用的题眼（标题 + 摘要；摘要空的老条目再看正文）
-EA_RE = re.compile(r"evolutionary|genetic algorithm|particle swarm|swarm intelligence|meta-?heuristic|differential evolution|nature-inspired|bio-inspired|"
-                   r"optimization algorithms?|\boptimizer\b|grey wolf|whale optimi|harmony search|bee colony|ant colony|simulated annealing|firefly|cuckoo|"
-                   r"multi-objective|benchmark functions|test functions|CEC ?20\d\d|engineering design problems|exploration and exploitation|population-based|fitness", re.I)
-ROBOT_RE = re.compile(r"\brobots?\b|robotic|manipulat|grasp|gripper|dexterous|teleoperat|embodied|end[- ]effector|sim-to-real|humanoid", re.I)
-HUM_CORE = re.compile(r"whole[- ]body|locomotion|loco-?manipulation|humanoid (control|motion|behavio)|motion (tracking|imitation|retargeting)|walking|\bgait\b|bipedal|legged", re.I)
-MANIP_CORE = re.compile(r"manipulat|grasp|dexterous|in-hand|pick[- ]and[- ]place|bimanual|tabletop|assembly|tool use", re.I)
+from . import taxonomy as tx
+
 REFS_RE = re.compile(r"\n\s*(references|bibliography)\s*\n", re.I)
+_rx_cache = {}
 
 
-def _cut_refs(text):
-    """切掉参考文献段（取最后一个 References 标题之后的都扔；附录在它前面的保留）。"""
+def _rx(pat):
+    if pat not in _rx_cache:
+        _rx_cache[pat] = re.compile(pat, 0 if re.search(r"\\b[A-Z]|[A-Z]{2}", pat) else re.I)   # upper-case in a pattern => proper noun, match case
+    return _rx_cache[pat]
+
+
+def cut_refs(text):
+    """Drop everything after the last 'References' heading (an appendix before it is kept)."""
     if not text: return ""
     hits = list(REFS_RE.finditer(text))
     if not hits: return text
     cut = hits[-1].start()
-    return text[:cut] if cut > len(text) * 0.3 else text        # 太靠前的不是真的参考文献标题（比如目录里）
+    return text[:cut] if cut > len(text) * 0.3 else text            # a heading that early is a table of contents, not the list
 
 
-def _snip(text, m, n=70):
+def snip(text, m, n=70):
     a, b = max(0, m.start() - n), min(len(text), m.end() + n)
     return re.sub(r"\s+", " ", text[a:b]).strip()
 
 
-def _rx(pat):
-    return re.compile(pat, 0 if re.search(r"\\b[A-Z]|[A-Z]{2}", pat) else re.I)   # 含大写专名的模式区分大小写（"Panda" "RL" "ACT"）
-
-
-NEG_CTX = re.compile(r"(unlike|without|instead of|rather than|compared (to|with)|not (require|rely|need)|beyond|alternative to|in contrast to|limitations? of|"
-                     r"prior|existing|previous|conventional|traditional|alternatives? (such as|like)|categorized|strategies|approaches|methods|such as)\b[^.]{0,50}$", re.I)
-
-
-def _score(tag, title, abstract, body):
-    """dict(head=标题/摘要命中数, body=正文命中数, ev=证据片段)。"""
-    head = title + "\n" + abstract
-    head_hits = body_hits = 0; ev = []
-    for pat, w in RULES[tag]["pats"]:
-        r = _rx(pat)
-        for m in r.finditer(head):
-            if w < 2: continue                                              # 弱模式（"instruction" "gripper" 之类）在摘要里出现也不算论文自己说的
-            if tag.startswith("method:") and NEG_CTX.search(head[max(0, m.start() - 60):m.start()]): continue   # "unlike imitation learning…" 不算
+def score_tag(tag, title, abstract, body):
+    """dict(head=title/abstract hits, body=weighted body hits, ev=[(where, snippet)])."""
+    r = tx.RULES[tag]; head = title + "\n" + abstract
+    head_hits = 0; body_hits = 0.0; ev = []
+    for pat, w in [(p, 1.0) for p in r.get("patterns", [])] + [(p, 0.5) for p in r.get("weak", [])]:
+        rx = _rx(pat)
+        for m in rx.finditer(head):
+            if w < 1: continue                                                  # weak words in the abstract are not the paper speaking
+            if tag.startswith("method:") and tx.NEGATIVE_CONTEXT and tx.NEGATIVE_CONTEXT.search(head[max(0, m.start() - 60):m.start()]): continue
             head_hits += 1
-            if len(ev) < 2: ev.append(("摘要" if m.start() > len(title) else "标题", _snip(head, m)))
-        ms = list(r.finditer(body))
+            if len(ev) < 2: ev.append(("abstract" if m.start() > len(title) else "title", snip(head, m)))
+        ms = list(rx.finditer(body))
         body_hits += len(ms) * w
-        if ms and len(ev) < 2: ev.append((f"正文×{len(ms)}", _snip(body, ms[0])))
+        if ms and len(ev) < 2: ev.append((f"body x{len(ms)}", snip(body, ms[0])))
     return dict(head=head_hits, body=body_hits, ev=ev)
 
 
+def _level(tag, s):
+    r = tx.RULES[tag]
+    if (s["head"] and r.get("head", True)) or s["body"] >= r.get("sure", 999): return "sure"
+    if s["head"] or s["body"] >= r.get("maybe", 999): return "maybe"
+    return None
+
+
+def _collection_score(c, head_txt, body):
+    h = sum(len(_rx(p).findall(head_txt)) for p in c.get("patterns", []))
+    b = sum(len(_rx(p).findall(body)) for p in c.get("patterns", []))
+    return h, b
+
+
 def suggest(title, abstract, text, has_pdf=True):
+    """Rules only. The LLM path (llm.py) reuses analyze() -> apply_relations() -> finish()."""
+    c = analyze(title, abstract, text, has_pdf)
+    apply_relations(c["fam_tags"], c["maybe"], c["S"], c["title"], c["head_txt"], c["body"])
+    return finish(c)
+
+
+def analyze(title, abstract, text, has_pdf=True):
+    """Score every tag and apply per-tag thresholds; returns the working context (before cross-tag relations)."""
     title, abstract = title or "", abstract or ""
-    body = _cut_refs(text or "")
-    head_txt = title + "\n" + abstract
-    S = {t: _score(t, title, abstract, body) for t in RULES}
-    sure, maybe, flags, evidence = [], {}, [], {}
+    body = cut_refs(text or ""); head_txt = title + "\n" + abstract
+    S = {t: score_tag(t, title, abstract, body) for t in tx.RULES if not t.startswith("type:")}
+    maybe, flags = {}, []
+    fam_tags = {f: [] for f in tx.FAMILIES}
 
-    def level(tag):
-        s, r = S[tag], RULES[tag]
-        if (s["head"] and r["head"]) or s["body"] >= r["sure"]: return "sure"
-        if s["head"] or s["body"] >= r["maybe"]: return "maybe"
-        return None
-    def fam(prefix): return [t for t in RULES if t.startswith(prefix)]
-    def pick(prefix, why="正文出现 {n} 次、摘要没提，可能只是相关工作/基线"):
-        got = []
-        for t in fam(prefix):
-            lv = level(t)
-            if lv == "sure": got.append(t)
-            elif lv == "maybe": maybe[t] = why.format(n=S[t]["body"])
-        return got
+    # ---- type (title, or "we introduce ... X" in the abstract) ----
+    types = []
+    for tag, r in ((t, r) for t, r in tx.RULES.items() if t.startswith("type:")):
+        if (r.get("title") and re.search(r["title"], title, re.I)) or \
+           (r.get("introduce") and re.search(r"\bwe (introduce|present|release)\b[^.]{0,30}\b(" + r["introduce"] + ")", abstract, re.I)):
+            types.append(tag)
 
-    # ---- type（只看标题和摘要里"我们提出"）----
-    for t, rx in (("type:survey", r"\bsurvey\b|\breview\b"), ("type:benchmark", r"benchmarks?\b"), ("type:dataset", r"\bdatasets?\b|\bdatabase\b")):
-        if re.search(rx, title, re.I) or (t != "type:survey" and re.search(r"\bwe (introduce|present|release)\b[^.]{0,30}\b(" + rx.strip("\\b") + r")", abstract, re.I)):
-            sure.append(t)
-    survey = "type:survey" in sure; bench = "type:benchmark" in sure
+    # ---- score every family ----
+    for fam in tx.FAMILIES:
+        spec = tx.FAMILY_RULES[fam]
+        for tag in (t for t in S if t.startswith(fam + ":")):
+            r = tx.RULES[tag]; s = S[tag]
+            if spec.get("context"):                                           # base: name must co-occur with a fine-tuning verb
+                name = r["patterns"][0]
+                if not s["head"] and not s["body"]: continue
+                if re.search(name, title, re.I): maybe[tag] = "the model in the title is the paper's own model, not a base"; continue
+                ctx = _rx(r"(" + spec["context"] + r")[^.]{0,60}(" + name + r")|(" + name + r")[^.]{0,60}(" + spec["context"] + r")")
+                hm, bm = list(ctx.finditer(head_txt)), list(ctx.finditer(body)); s["ctx"] = len(hm) * 3 + len(bm)
+                if hm: fam_tags[fam].append(tag); s["ev"] = [("abstract, fine-tuning context", snip(head_txt, m)) for m in hm[:2]]
+                elif len(bm) >= 2: maybe[tag] = f"{len(bm)} fine-tuning mentions in the body but none in the abstract — real fine-tune or a baseline?"; s["ev"] = [("body, fine-tuning context", snip(body, bm[0]))]
+                else: maybe[tag] = "model named, but no fine-tuning / frozen context (architecturally similar or a baseline: no base tag)"
+                continue
+            lv = _level(tag, s)
+            if lv == "sure" and s["head"] and r.get("head", True) is False:   # head hit but the family needs contribution context (teleop)
+                lv = "maybe"
+            if s["head"] and r.get("head", True) is False:
+                if (r.get("title_requires") and re.search(r["title_requires"], title, re.I)) or (r.get("head_requires") and re.search(r["head_requires"], head_txt, re.I)):
+                    lv = "sure"
+                elif r.get("title_maybe") and re.search(r["title_maybe"], title, re.I):
+                    lv = "maybe"; maybe[tag] = f"'{r['title_maybe']}' in the title — may or may not be this paper's contribution, please decide"
+                else:
+                    lv = "maybe"; maybe[tag] = "mentioned in the abstract, but reads like context (e.g. data collection), not a contribution"
+            if lv == "sure": fam_tags[fam].append(tag)
+            elif lv == "maybe" and tag not in maybe: maybe[tag] = f"{s['body']:g} weighted body hits, not in the abstract — could be related work or a baseline"
 
-    # ---- method ----
-    meth = pick("method:")
-    if "method:teleop" not in meth and S["method:teleop"]["head"]:              # 摘要提遥操：得是贡献（"we ... teleoperation system"），不是"用遥操收数据"
-        if re.search(r"teleoperat", title, re.I) or re.search(r"\b(we|our)\b[^.]{0,60}\b(propose|present|introduce|develop|build|design)\b[^.]{0,60}(teleoperat|retarget)|(teleoperation|teleop|retargeting) (system|framework|interface|pipeline|device|setup)", head_txt, re.I):
-            meth.append("method:teleop"); maybe.pop("method:teleop", None)
-        elif re.search(r"retarget", title, re.I): maybe["method:teleop"] = "标题有 retargeting：人手→机器手重定向算 teleop，但纯仿真/单示范的重定向不算，请定"
-        else: maybe["method:teleop"] = "摘要提到遥操，但像是用来收示教数据，不是论文贡献"
-    if "method:vla" in meth and "method:policy-learning" in meth:
-        maybe["method:policy-learning"] = "有 VLA 骨干时示教学习不另贴（词表：policy-learning = 无大 VLA 骨干的示教学习）"; meth.remove("method:policy-learning")
-    if "method:foundation-model" in meth and any(t in meth for t in ("method:vla", "method:policy-learning", "method:rl", "method:teleop", "method:grasp-synthesis")):
-        maybe["method:foundation-model"] = "论文本身是动作模型/控制器（foundation-model 只贴本身不是动作模型的 VLM/LLM/骨干，BFM-Zero 也只贴 rl）"; meth.remove("method:foundation-model")
-    ranked = sorted(meth, key=lambda t: -(S[t]["head"] * 100 + S[t]["body"]))
-    for t in ranked[2:]: maybe[t] = f"method 每篇最多 2 个，它排第 {ranked.index(t) + 1}"
-    meth = ranked[:2]
+    return dict(title=title, abstract=abstract, body=body, head_txt=head_txt, has_pdf=has_pdf, S=S, fam_tags=fam_tags, maybe=maybe, flags=flags, types=types)
 
-    # ---- embod ----
-    emb = pick("embod:", "只在正文出现 {n} 次（可能是相关工作/基线）")
-    if "embod:bimanual" in emb and "embod:single-arm" in emb and not (re.search(r"single[- ]arm", head_txt, re.I) or len(re.findall(r"single[- ]arm", body, re.I)) >= 3):
-        emb.remove("embod:single-arm"); maybe["embod:single-arm"] = "臂名出现但论文是双臂系统，没有明说 single-arm（多平台才两个都贴）"
 
-    # ---- tech ----
-    tech = pick("tech:")
-    if "tech:flow-matching" in tech and "tech:diffusion" in tech and not re.search(r"diffusion", title, re.I):
-        tech.remove("tech:diffusion"); maybe["tech:diffusion"] = "流匹配论文的摘要里提扩散多半是对比，不是用了扩散"
+def apply_relations(fam_tags, maybe, S, title, head_txt, body):
+    """excludes / implies / excluded_by / weak_with / per-family max — shared by the rule and LLM paths."""
+    all_sure = {t for ts in fam_tags.values() for t in ts}
+    for tag in sorted(all_sure):
+        r = tx.RULES[tag]
+        for ex in r.get("excludes", []):
+            ex = {"tag": ex} if isinstance(ex, str) else ex
+            other = ex["tag"]; fam = other.split(":")[0]
+            if other not in fam_tags.get(fam, []): continue
+            if ex.get("unless") and (re.search(ex["unless"], head_txt, re.I) or len(re.findall(ex["unless"], body, re.I)) >= ex.get("min", 1)): continue
+            if ex.get("unless_title") and re.search(ex["unless_title"], title, re.I): continue
+            fam_tags[fam].remove(other); maybe[other] = f"suppressed by {tag} ({tx.RULES[other].get('description', '')[:60]})"
+        for other in r.get("implies", []):
+            fam = other.split(":")[0]
+            if other not in fam_tags[fam]: fam_tags[fam].append(other); maybe.pop(other, None)
+    all_sure = {t for ts in fam_tags.values() for t in ts}
+    for fam in tx.FAMILIES:
+        for tag in list(fam_tags[fam]):
+            r = tx.RULES[tag]
+            if any(x in all_sure for x in r.get("excluded_by", [])):
+                fam_tags[fam].remove(tag); maybe[tag] = "the paper itself is an action model / controller (" + r.get("description", "")[:70] + ")"
+            elif r.get("weak_with") and not S[tag]["head"] and any(x in all_sure for x in r["weak_with"]):
+                fam_tags[fam].remove(tag); maybe[tag] = "no abstract mention and the paper uses " + "/".join(x.split(":")[1] for x in r["weak_with"] if x in all_sure) + " — cameras may only feed that"
+        mx = tx.FAMILY_RULES[fam].get("max")
+        if mx and len(fam_tags[fam]) > mx:
+            ranked = sorted(fam_tags[fam], key=lambda t: -(S[t]["head"] * 100 + S[t]["body"]))
+            for t in ranked[mx:]: maybe[t] = f"at most {mx} {fam} tags; this ranked #{ranked.index(t) + 1}"
+            fam_tags[fam] = ranked[:mx]
 
-    # ---- base：要有微调/冻结语境 ----
-    base = []
-    for t in fam("base:"):
-        s = S[t]
-        if not s["head"] and not s["body"]: continue
-        name = RULES[t]["pats"][0][0]
-        if re.search(name, title, re.I): maybe[t] = "标题里就是这个模型——论文提出的就是它本身，不贴 base"; continue
-        ctx = _rx(r"(" + BASE_CTX + r")[^.]{0,60}(" + name + r")|(" + name + r")[^.]{0,60}(" + BASE_CTX + r")")
-        if survey or bench: maybe[t] = "综述/基准里提到，不是微调"; continue
-        hm, bm = list(ctx.finditer(head_txt)), list(ctx.finditer(body))
-        if hm: base.append(t); S[t]["ev"] = [("摘要·微调语境", _snip(head_txt, m)) for m in hm[:2]]
-        elif len(bm) >= 2: maybe[t] = f"正文 {len(bm)} 处微调/冻结语境但摘要没说，确认是真微调还是基线"; S[t]["ev"] = [("正文·微调语境", _snip(body, bm[0]))]
-        else: maybe[t] = "提到了模型名但没看到微调/冻结的语境（架构类似或基线不贴 base）"
-    if "base:pi0.5" in base and "base:pi0" in base: base.remove("base:pi0")   # π0.5 的引用里必然带 π0
 
-    # ---- modality（只标策略真正消费的输入）----
-    mod = pick("modality:", "正文出现 {n} 次，未确认是策略输入")
-    if "method:vla" in meth:                                                   # VLA 按定义吃图像 + 语言
-        for t in ("modality:vision", "modality:language"):
-            if t not in mod: mod.append(t); maybe.pop(t, None)
-    if "modality:vision" in mod and not S["modality:vision"]["head"] and any(t in mod for t in ("modality:point-cloud", "modality:depth")) and "method:vla" not in meth:
-        mod.remove("modality:vision"); maybe["modality:vision"] = "相机可能只用来生成点云/深度，摘要没说策略吃 RGB"
 
-    # ---- 分类 ----
-    robot_h = len(ROBOT_RE.findall(head_txt)); ea_h = len(EA_RE.findall(head_txt))
-    robot_b = len(ROBOT_RE.findall(body)); ea_b = len(EA_RE.findall(body))
-    hum = "embod:humanoid" in emb; hum_core = bool(HUM_CORE.search(head_txt)); manip_t = bool(MANIP_CORE.search(title)); manip_a = bool(MANIP_CORE.search(abstract))
+def finish(c):
+    """Collection decision, survey/benchmark/strip rules, flags -> the suggestion dict."""
+    title, abstract, body, head_txt, has_pdf = c["title"], c["abstract"], c["body"], c["head_txt"], c["has_pdf"]
+    S, fam_tags, maybe, flags, types = c["S"], c["fam_tags"], dict(c["maybe"]), list(c["flags"]), list(c["types"])
+    evidence = {}
+    all_sure = {t for ts in fam_tags.values() for t in ts}
+    cscore = {c["name"]: _collection_score(c, head_txt, body) for c in tx.COLLECTION_RULES}
+    def total(c):
+        h, b = cscore[c["name"]]; s = 3 * h
+        for pat, bonus in c.get("tag_bonus", {}).items():
+            if any(re.fullmatch(pat.replace("*", ".*"), t) for t in all_sure): s += bonus
+        if c.get("title_patterns") and any(_rx(p).search(title) for p in c["title_patterns"]): s += 6
+        return s
+    coll = None; winner = None
+    for c in tx.COLLECTION_RULES:
+        if c.get("default"): continue
+        if any(t not in all_sure for t in c.get("requires", [])): continue
+        if c.get("not_in_title") and any(_rx(p).search(title) for p in c["not_in_title"]): continue
+        s = total(c); others = max((total(o) for o in tx.COLLECTION_RULES if o is not c and not o.get("default")), default=0)
+        ok = s >= c.get("min_score", 3) and (c.get("max_other") is None or others <= c["max_other"])
+        if not ok and c.get("body_fallback") and all(cscore[o["name"]][0] == 0 for o in tx.COLLECTION_RULES) and cscore[c["name"]][1] >= c["body_fallback"]:
+            ok = all(cscore[o["name"]][1] <= 3 for o in tx.COLLECTION_RULES if o is not c)      # thin abstract: let the body decide
+        if ok: coll, winner = c["name"], c; break
+    if not coll:
+        coll = tx.DEFAULT_COLLECTION; winner = next(c for c in tx.COLLECTION_RULES if c["name"] == coll)
+        hits = [c["name"] for c in tx.COLLECTION_RULES if not c.get("default") and cscore[c["name"]][0]]
+        if hits: flags.append(f"BOUNDARY: default collection, but the abstract also matches {'/'.join(hits)} vocabulary — confirm the collection")
+    if winner.get("boundary_with"):
+        other = next(c for c in tx.COLLECTION_RULES if c["name"] == winner["boundary_with"])
+        bp = other.get("boundary_patterns") or other.get("title_patterns") or other.get("patterns", [])
+        if any(_rx(p).search(abstract) for p in bp) and all(t in all_sure for t in other.get("requires", [])):
+            if winner.get("boundary_pause", True): flags.append(f"BOUNDARY: {coll} vs {other['name']} — the abstract also matches {other['name']} vocabulary; confirm the collection")
+            else: flags.append(f"also touches {other['name']} — consider --also \"{other['name']}\" if it does both")
     also = None
-    if (ea_h >= 2 and robot_h <= 1) or (ea_h + robot_h == 0 and ea_b >= 15 and robot_b <= 3):
-        coll = EA; meth, emb, tech, base, mod, maybe = [], [], [], [], [], {}; sure = [t for t in sure if t == "type:survey"]
-        flags.append("Evolution Algorithm：按规则只贴 status")
-    elif hum and hum_core and not manip_t:
-        coll = HUM
-        if manip_a: flags.append("Humanoid / Dex-Manipulation 边界：摘要也提操作——研究对象是人形本身才归 Humanoid，在人形上做操作归 Dex-Manipulation（+embod:humanoid）")
-    elif emb or robot_h >= 2 or manip_t or (manip_a and robot_h >= 1):
-        coll = DM
-        if hum and hum_core: flags.append("也涉及人形全身（whole-body/locomotion）：既做灵巧手又做人形全身的可 --also Humanoid")
-    else:
-        coll = AIF
-        if robot_h: flags.append(f"摘要有 {robot_h} 处机器人相关词但没判出本体/操作题眼，确认是否该归 Dex-Manipulation")
-        for t in emb: maybe[t] = "归 AI Foundation 的纯 learning 论文，本体词可能只是仿真环境（MuJoCo Humanoid 不算）"
-        emb = []; base = []; maybe = {t: w for t, w in maybe.items() if not t.startswith("base:")}   # RL 理论文里的 π0 是初始策略记号，不是 π0 模型
-    if coll == DM and survey: also = AIF
-    if coll == DM and not emb: flags.append("embod 判不出，留空（Uncertain）")
-    if coll in (DM, HUM) and not meth: flags.append("method 判不出，留空")
-    if coll == AIF and not meth and not survey: flags.append("method 判不出（经典 ML 论文常常不贴，和库里 VAE/t-SNE 一致）")
-    if not has_pdf: flags.append("没有正文，只靠摘要判的：标签偏少，PDF 拖进去后可再 tag 补")
+    if winner.get("status_only"):
+        fam_tags = {f: [] for f in tx.FAMILIES}; maybe = {}; types = [t for t in types if t == "type:survey"]
+        flags.append(f"{coll}: status tag only, by rule")
+    for fam in winner.get("strip", []):
+        for t in fam_tags[fam]: maybe[t] = f"{coll} items don't get {fam} tags (hardware words there are usually simulation environments)"
+        fam_tags[fam] = []; maybe = {t: w for t, w in maybe.items() if not (fam == "base" and t.startswith("base:"))}
+    for ttag in types:                                                          # survey / benchmark: strip families, keep head-only methods
+        r = tx.RULES[ttag]
+        for fam in r.get("strip", []): fam_tags[fam] = []
+        for fam in r.get("head_only", []): fam_tags[fam] = [t for t in fam_tags[fam] if S[t]["head"]]
+        if r.get("strip"): maybe = {t: w for t, w in maybe.items() if t.split(":")[0] not in r["strip"]}; flags.append(f"{ttag.split(':')[1]}: only type + {'/'.join(r.get('head_only', []))} named in the title/abstract are tagged")
+    if "type:survey" in types and coll != tx.SURVEY_HOME and tx.SURVEY_HOME: also = tx.SURVEY_HOME
+    if not winner.get("status_only") and not winner.get("default") and "embod" in fam_tags and not fam_tags["embod"]: flags.append("no embodiment found — embod left empty (uncertain)")
+    if not winner.get("status_only") and not fam_tags["method"]: flags.append("no method found — left empty" + (" (classic ML papers often carry none)" if winner.get("default") else ""))
+    if not has_pdf: flags.append("no full text — judged from the abstract only; tags may be missing, add them with `zc.py tag` once the PDF is in")
 
-    if survey:                                                                 # 综述：本体/机制/模态都是在讲别人，只留标题/摘要里的 method
-        meth = [t for t in meth if S[t]["head"]]; emb, tech, base, mod = [], [], [], []; maybe = {}
-        flags.append("综述：只贴 type:survey + 标题/摘要点名的 method，embod/tech/modality 不贴")
-    elif bench:                                                                # 基准：本体是真的（跑了实机/仿真），机制/模态/方法是基线的
-        meth = [t for t in meth if S[t]["head"]]; tech, base, mod = [], [], []
-        maybe = {t: w for t, w in maybe.items() if t.startswith("embod:")}
-        flags.append("基准/工具集：贴 type + embod，method 只留标题/摘要点名的；基线用的 VLA/扩散不贴")
-    sure = sure + meth + emb + tech + base + mod
+    sure = types + [t for f in tx.FAMILIES for t in fam_tags[f]]
     for t in sure: evidence[t] = S[t]["ev"][:2] if t in S else []
     for t in maybe: evidence[t] = S[t]["ev"][:1] if t in S else []
-    return dict(collection=coll, also=also, sure=sure, maybe=maybe, flags=flags, evidence=evidence)
+    return dict(collection=coll, also=also, sure=sure, maybe=maybe, flags=flags, evidence=evidence,
+                scores={t: dict(head=s["head"], body=s["body"], ctx=s.get("ctx", 0)) for t, s in S.items()}, rule_sure=list(c["rule_sure"]) if "rule_sure" in c else sure)
+
+
+def evidence_pack(sg, S_all=None, limit=2, width=160):
+    """Evidence snippets for every tag with any hit (sure or not) — the grounded context handed to the LLM."""
+    out = []
+    for t, evs in sg["evidence"].items():
+        for where, s in evs[:limit]: out.append(f"[{t}] ({where}) ...{s[:width]}...")
+    return out
 
 
 def fmt(sg, width=150):
-    """打印成人能扫一眼的证据块。"""
-    out = [f"  分类    : {sg['collection']}" + (f" + {sg['also']}" if sg["also"] else "")]
-    out.append("  贴      : " + (", ".join(sg["sure"]) or "(只有 status)"))
+    out = [f"  collection: {sg['collection']}" + (f" + {sg['also']}" if sg["also"] else "")]
+    out.append("  assign    : " + (", ".join(sg["sure"]) or "(status only)"))
     for t in sg["sure"]:
-        for where, s in sg["evidence"].get(t, []): out.append(f"      {t:<24} ← {where}: …{s[:width]}…")
+        for where, s in sg["evidence"].get(t, []): out.append(f"      {t:<24} <- {where}: ...{s[:width]}...")
     if sg["maybe"]:
-        out.append("  候选    : （不贴，汇报里和用户讨论）")
+        out.append("  candidates: (not assigned — discuss with the user)")
         for t, why in sg["maybe"].items():
             ev = sg["evidence"].get(t) or []
-            out.append(f"      {t:<24} {why}" + (f"  ← {ev[0][0]}: …{ev[0][1][:90]}…" if ev else ""))
-    for f in sg["flags"]: out.append(f"  ⚠ {f}")
+            out.append(f"      {t:<24} {why}" + (f"  <- {ev[0][0]}: ...{ev[0][1][:90]}..." if ev else ""))
+    for f in sg["flags"]: out.append(f"  ! {f}")
     return "\n".join(out)

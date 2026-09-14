@@ -1,6 +1,6 @@
-"""本地 zotero.sqlite 只读访问（Zotero 运行中也能用，见 config.connect_ro）。绝不写 sqlite。
-dump()   → cache/library_dump.json（标题/作者/分类/标签/PDF 路径/笔记/批注）
-load()   → dump 的内容（需要时先刷新）
+"""Read-only access to the local zotero.sqlite (works while Zotero runs, see config.connect_ro). Never writes to sqlite.
+dump()   -> cache/library_dump.json (title / authors / collections / tags / PDF paths / notes / annotations)
+load()   -> the dump's content (refreshed first if missing)
 """
 import json, os, re, sys
 
@@ -38,10 +38,10 @@ def dump(table=False):
             authors=authors, venue=f.get("publicationTitle") or f.get("proceedingsTitle") or f.get("repository") or "",
             collections=colls, tags=tags, pdfs=pdfs, notes=notes, annotations=annots,
             dateAdded=dateAdded[:10], url=f.get("url", ""), doi=f.get("DOI", ""), abstract=f.get("abstractNote", ""),
-            shortTitle=f.get("shortTitle", "")))
+            shortTitle=f.get("shortTitle", ""), date=f.get("date", ""), extra=f.get("extra", "")))
     os.makedirs(CACHE, exist_ok=True)
     with open(DUMP, "w", encoding="utf-8") as f: json.dump(rows, f, ensure_ascii=False, indent=1)
-    print(f"{len(rows)} 篇 -> {os.path.relpath(DUMP)}", file=sys.stderr)
+    print(f"{len(rows)} items -> {os.path.relpath(DUMP)}", file=sys.stderr)
     if table:
         for r in rows:
             print(f"{r['year']:<5}{(','.join(r['collections']) or '-')[:21]:<22}{(r['authors'][0] if r['authors'] else '?')[:14]:<15}{r['title'][:80]}")
@@ -54,14 +54,14 @@ def load(refresh=False):
 
 
 def collection_id(name):
-    """本地 collectionID（connector 的 target 用 C<id>）。"""
+    """Local collectionID (the connector target is C<id>)."""
     r = connect_ro().execute("select collectionID from collections where libraryID=1 and collectionName=?", (name,)).fetchone()
-    if not r: raise RuntimeError(f"本地没有分类 {name!r}")
+    if not r: raise RuntimeError(f"no local collection named {name!r}")
     return r[0]
 
 
 def item_by_title(title):
-    """按标题找最新一条（connector saveItems 不返回 key，只能这样读回）。"""
+    """Newest item with this exact title (connector saveItems returns no key, so this is how we read it back)."""
     c = connect_ro()
     r = c.execute("""select i.itemID, i.key, i.dateAdded from items i join itemData d on d.itemID=i.itemID join fields f on f.fieldID=d.fieldID
                      join itemDataValues v on v.valueID=d.valueID where f.fieldName='title' and v.value=? and i.itemID not in (select itemID from deletedItems)
@@ -75,6 +75,6 @@ def item_by_title(title):
 
 
 def sync_state(key):
-    """(synced, version) —— synced=0 表示本地有未上传的改动。"""
+    """(synced, version) — synced=0 means the local item has changes not yet uploaded."""
     r = connect_ro().execute("select synced, version from items where key=?", (key,)).fetchone()
     return tuple(r) if r else (None, None)

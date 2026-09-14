@@ -1,4 +1,4 @@
-"""arXiv 预印本查有没有中稿：arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref → 项目页（CLAUDE.md §4 来源优先级）。"""
+"""Has an arXiv preprint been published? arXiv comment -> PDF first-page statement -> Semantic Scholar -> Crossref -> project page (source priority per CLAUDE.md)."""
 import html, json, re, time, urllib.error, urllib.parse
 
 from .http import http, get_text, UA_LOCAL
@@ -8,8 +8,9 @@ from .venues import abbr_from_name, venue_from_context, venue_from_pdf
 
 
 def s2_venues(arxiv_ids):
-    """Semantic Scholar 批量查发表刊/会：{arXiv id: (缩写或None, 证据)}。只认 type=conference 或非 arXiv DOI 的记录
-    （S2 会把 cs.RO 预印本挂到一个叫 "Robotics" 的假期刊上，DOI 仍是 arXiv 的，那种不算）。无 key 时常 429，退避重试。"""
+    """Semantic Scholar batch lookup of the publication venue: {arXiv id: (abbr or None, evidence)}. Only records with
+    type=conference or a non-arXiv DOI count (S2 files cs.RO preprints under a fake journal called "Robotics" with the arXiv
+    DOI — not a publication). Without an API key it 429s often; back off and retry."""
     out = {}
     ids = [a for a in dict.fromkeys(arxiv_ids) if a]
     for i in range(0, len(ids), 200):
@@ -32,7 +33,7 @@ def s2_venues(arxiv_ids):
     return out
 
 def crossref_by_title(title):
-    """Crossref 按标题找已发表版本（IEEE 会议/期刊有 DOI 的才找得到）：(缩写或None, 证据) 或 (None, None)。"""
+    """Crossref title search for a published version (only venues that mint DOIs, e.g. IEEE): (abbr or None, evidence) or (None, None)."""
     try:
         q = urllib.parse.quote(re.sub(r"[^\w\s-]", " ", title)[:200])
         js = json.loads(get_text(f"https://api.crossref.org/works?query.bibliographic={q}&rows=3&select=DOI,title,container-title,event,type", ua=UA_LOCAL))
@@ -45,17 +46,17 @@ def crossref_by_title(title):
     return None, None
 
 def venue_from_page(url):
-    """抓项目页/README，找 "Accepted to CoRL 2026" 这类声明 → (缩写, 证据) ；写着 under review / anonymous 返回 (None, 说明)。"""
+    """Fetch a project page / README and look for "Accepted to CoRL 2026"-style statements -> (abbr, evidence); (None, note) when it says under review / anonymous."""
     try: page = get_text(url, timeout=30)
     except Exception: return None, None
-    txt = re.sub(r"<!--.*?-->", " ", page, flags=re.S)                  # 注释里常留着模板的 "Anonymous Author(s)"，不算
+    txt = re.sub(r"<!--.*?-->", " ", page, flags=re.S)                  # HTML comments often keep the template's "Anonymous Author(s)"; ignore them
     txt = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", txt, flags=re.S | re.I)
     txt = ws(html.unescape(re.sub(r"<[^>]+>", " ", txt)))
-    if re.search(r"anonymous submission|under review", txt, re.I): return None, f"{url} 写着 under review / anonymous"
-    head = txt[:800]                                                    # 页头徽章：直接写 "CoRL 2025"
+    if re.search(r"anonymous submission|under review", txt, re.I): return None, f"{url} says under review / anonymous"
+    head = txt[:800]                                                    # header badge: literally "CoRL 2025"
     v = venue_from_context(head)
     if v and re.search(r"(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats)\W{0,3}20\d\d", head, re.I):
-        return v, f"{url} 页头: " + re.search(r".{0,50}(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats)\W{0,3}20\d\d.{0,30}", head, re.I).group(0)
+        return v, f"{url} header: " + re.search(r".{0,50}(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats)\W{0,3}20\d\d.{0,30}", head, re.I).group(0)
     for s in re.split(r"(?<=[.!。])\s+", txt):
         if len(s) > 300 or not re.search(r"accept|to appear|publish|presented at|\boral\b|spotlight|proceedings", s, re.I): continue
         v = venue_from_context(s)
@@ -63,7 +64,7 @@ def venue_from_page(url):
     return None, None
 
 def lookup_published(m, text=None, s2=None):
-    """arXiv 预印本查有没有中稿：arXiv comment → PDF 首页声明 → Semantic Scholar → Crossref → 项目页。回填 m['venue'] / m['venue_src']。"""
+    """Is this arXiv preprint published? arXiv comment -> PDF first page -> Semantic Scholar -> Crossref -> project page. Fills m['venue'] / m['venue_src']."""
     if m.get("venue_src") != "default": return
     v, ev = venue_from_pdf(text) if text else (None, None)
     if v: m["venue"], m["venue_src"] = v, f"pdf: {ev}"; return
@@ -72,10 +73,10 @@ def lookup_published(m, text=None, s2=None):
     if m["id"] in s2:
         ab, ev = s2[m["id"]]
         if ab: m["venue"], m["venue_src"] = ab, ev; return
-        notes.append(f"S2 说是 {ev}，缩写表里没有 ⚠")
+        notes.append(f"S2 says {ev}, no abbreviation in taxonomy.toml !")
     ab, ev = crossref_by_title(m["title"])
     if ab: m["venue"], m["venue_src"] = ab, ev; return
-    if ev: notes.append(f"{ev}，缩写表里没有 ⚠")
+    if ev: notes.append(f"{ev}, no abbreviation in taxonomy.toml !")
     for u in project_urls(m, text):
         ab, ev = venue_from_page(u)
         if ab: m["venue"], m["venue_src"] = ab, "project page " + ev; return

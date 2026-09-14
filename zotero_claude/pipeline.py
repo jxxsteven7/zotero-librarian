@@ -1,12 +1,23 @@
-"""端到端入库：fetch → 自动分类/贴标签（classify）→ connector 入库 → 等远端同步核对 → 提交日志 → 打印汇报表。
-`/download` skill 只跑 `zc.py add <链接>…`，把打印出来的汇报转给用户即可；需要人定的地方脚本会标 ⏸ / ⚠。"""
-import os, subprocess
+"""End-to-end flows.
 
-from . import classify, connector, fetch, localdb, zapi
-from .config import INBOX, LOG, ROOT
-from .vocab import COLLECTIONS, sort_tags
+add    link -> fetch -> classify (rules + local LLM) -> save through the desktop connector -> verify on the server ->
+       commit the audit log -> print a report row.  Used by the /download skill.
+tidy   organize items that were dropped into Zotero by hand (no status tag yet): fill missing metadata from arXiv /
+       Crossref, format the title, set URL / short title, classify, file into a collection — all through the Web API.
+verify one item: server state + local sync state.
+Things a human must decide are marked "PAUSE" (collection boundary) and the item is skipped, with the exact command to
+finish it."""
+import os, re, subprocess
+from datetime import date
 
-PAUSE_FLAGS = ("Humanoid / Dex-Manipulation 边界", "确认是否该归 Dex-Manipulation")     # 这两种分类拿不准时不自动入库
+from . import classify, connector, fetch, llm, localdb, taxonomy as tx, zapi
+from .config import DATA_DIR, INBOX, LOG, ROOT
+from .pdf import pdf_text, project_urls, project_url_score
+from .published import lookup_published
+from .sources import ARXIV_ID, meta_arxiv, meta_crossref, meta_page
+from .titles import fmt_date, short_title, split_prefix
+
+HEADER = "| key | title | collection | tags | PDF | notes |\n|---|---|---|---|---|---|"
 
 
 def _text(slug):
@@ -14,39 +25,43 @@ def _text(slug):
     return open(p, encoding="utf-8").read() if os.path.exists(p) else ""
 
 
-def suggest_for(m):
-    return classify.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]), has_pdf=bool(m.get("pdf_src")))
+def suggest_for(m, text=None):
+    return llm.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]) if text is None else text, has_pdf=bool(m.get("pdf_src")) if text is None else bool(text))
 
 
 def brief(m, sg):
-    """比 fetch 的卡片短：不贴整段摘要（分类已经由脚本判了），只给人核对需要的。"""
-    a = ", ".join((x["firstName"] + " " + x["lastName"]).strip() for x in m["authors"][:3]) + (" …" if len(m["authors"]) > 3 else "")
+    """Shorter than the fetch card: no full abstract (the script already judged it), just what a reviewer needs."""
+    a = ", ".join((x["firstName"] + " " + x["lastName"]).strip() for x in m["authors"][:3]) + (" ..." if len(m["authors"]) > 3 else "")
     print(f"=== {m['slug']}  ({m['source']}: {m['id']})")
-    print(f"  标题    : {m['proposed_title']}   短名: {m.get('short_title')}")
-    print(f"  作者    : {a}")
-    print(f"  日期    : {m.get('date') or '?'} ← {m.get('date_src')}   刊/会: {m.get('venue')} ← {m.get('venue_src')}")
-    print(f"  URL     : {m.get('project_url') or (m.get('url') or '-') + '（没认出项目页）'}")
-    print(f"  PDF     : {'ok ← ' + m['pdf_src'] if m.get('pdf_src') else '没拿到 ' + '; '.join(m.get('pdf_tried', []))[:200]}")
-    if m.get("duplicate"): print(f"  ⚠ 重复  : 库里已有 {m['duplicate']['key']} | {m['duplicate']['title']}")
-    print(f"  摘要    : {m.get('abstract', '')[:300]}…")
-    print(classify.fmt(sg))
+    print(f"  title     : {m['proposed_title']}   short: {m.get('short_title')}")
+    print(f"  authors   : {a}")
+    print(f"  date      : {m.get('date') or '?'} <- {m.get('date_src')}   venue: {m.get('venue')} <- {m.get('venue_src')}")
+    print(f"  URL       : {m.get('project_url') or (m.get('url') or '-') + ' (no project page found)'}")
+    print(f"  PDF       : {'ok <- ' + m['pdf_src'] if m.get('pdf_src') else 'not obtained ' + '; '.join(m.get('pdf_tried', []))[:200]}")
+    if m.get("duplicate"): print(f"  ! duplicate: already in the library as {m['duplicate']['key']} | {m['duplicate']['title']}")
+    print(f"  abstract  : {m.get('abstract', '')[:300]}...")
+    print(classify.fmt(sg)); l = llm.fmt_llm(sg)
+    if l: print(l)
 
 
 def decide(sg, collection=None, tags=None, drop=None, also=None, first=False):
-    """把脚本建议和命令行覆盖合成最终 (collection, also, tags)。"""
+    """Merge the script's suggestion with command-line overrides -> (collection, also, tags)."""
     coll = collection or sg["collection"]
-    if coll not in COLLECTIONS: raise RuntimeError(f"分类只能是 {COLLECTIONS}")
+    if coll not in tx.COLLECTIONS: raise RuntimeError(f"collection must be one of {tx.COLLECTIONS}")
     tags = [t for t in sg["sure"] if t not in set(drop or [])] + [t for t in (tags or []) if t]
-    tags = sort_tags(tags + (["status:to-read-first"] if first else []))
+    tags = tx.sort_tags(tags + (["status:" + tx.READ_AXIS[0]] if first else []))
     return coll, (also or sg["also"]), tags
 
 
+def paused(sg): return any(f.startswith("BOUNDARY") for f in sg["flags"])
+
+
 def verify(key, wait=150, quiet=False):
-    """远端（Web API）+ 本地（sqlite）核对一条：等客户端把新条目同步上去，最多 wait 秒。返回 dict 或 None。"""
+    """Server (Web API) + local (sqlite) state of one item; waits up to `wait` seconds for the client to sync a new item."""
     env = zapi.env_or_die()
-    it = zapi.wait_remote(env, key, wait=wait, step=10)                      # wait=0 只查一次
+    it = zapi.wait_remote(env, key, wait=wait, step=10)                      # wait=0: a single check
     if not it:
-        if not quiet: print(f"  同步    : ✗ 等了 {wait}s 远端还没有 {key}（Zotero 没开自动同步？稍后 python3 zc.py verify {key}）")
+        if not quiet: print(f"  sync      : x not on the server after {wait}s (is Zotero auto-sync on? check later with `python3 zc.py verify {key}`)")
         return None
     names = {v: k for k, v in zapi.remote_collections(env)[0].items()}
     d = it["data"]; kids = [(c["data"].get("title"), c["data"].get("linkMode")) for c in zapi.children(env, key)]
@@ -55,47 +70,44 @@ def verify(key, wait=150, quiet=False):
                 url=d.get("url", ""), short=d.get("shortTitle", ""), children=kids, local_synced=synced, local_version=ver,
                 notion="Notion" in [k[0] for k in kids])
     if not quiet:
-        print(f"  同步    : ✓ 远端 v{info['version']} | 分类 {info['collections']} | 标签 {info['tags']}")
-        print(f"            URL {info['url']} | 短名 {info['short']} | 附件 {[k[0] for k in kids]} | 本地 synced={synced}" + ("" if info["notion"] else " | Notion 附件还没出现（Notero 一般 1 分钟内推）"))
+        print(f"  sync      : ok server v{info['version']} | collections {info['collections']} | tags {info['tags']}")
+        print(f"              URL {info['url']} | short {info['short']} | children {[k[0] for k in kids]} | local synced={synced}" + ("" if info["notion"] else " | Notion attachment not there yet (Notero usually pushes within a minute)"))
     return info
 
 
 def commit_log(msg):
-    """把审计日志这一个文件提交并推送（其他改动不碰），失败只警告不中断。"""
+    """Commit and push the audit log (that single file; nothing else). Failures only warn."""
     def git(*a): return subprocess.run(["git", "-C", ROOT] + list(a), capture_output=True, text=True)
     rel = os.path.relpath(LOG, ROOT)
-    if not git("status", "--porcelain", "--", rel).stdout.strip(): return "日志没变化"
+    if not git("status", "--porcelain", "--", rel).stdout.strip(): return "log unchanged"
     git("add", "--", rel)
     r = git("commit", "-q", "-m", msg + "\n\nCo-Authored-By: Claude <noreply@anthropic.com>", "--", rel)
-    if r.returncode: return "commit 失败: " + (r.stderr or r.stdout).strip()[:200]
+    if r.returncode: return "commit failed: " + (r.stderr or r.stdout).strip()[:200]
     r = git("push", "-q")
-    return "已提交并推送" if r.returncode == 0 else "已提交，push 失败（" + (r.stderr or r.stdout).strip()[:120] + "）——稍后 git push"
+    return "committed and pushed" if r.returncode == 0 else "committed; push failed (" + (r.stderr or r.stdout).strip()[:120] + ") — run git push later"
 
 
 def report_row(got, sg, info, note_extra=""):
     notes = []
-    if sg["maybe"]: notes.append("候选: " + "; ".join(f"`{t}`（{w}）" for t, w in sg["maybe"].items()))
-    notes += [f for f in sg["flags"] if "Evolution Algorithm" not in f]
-    if "⚠" in (got.get("date_src") or "") or "⚠" in (got.get("venue_src") or ""): notes.append(f"日期/刊会有 ⚠：{got.get('date_src')} / {got.get('venue_src')}")
+    if sg["maybe"]: notes.append("candidates: " + "; ".join(f"`{t}` ({w})" for t, w in sg["maybe"].items()))
+    notes += [f for f in sg["flags"] if "status tag only" not in f]
+    if "!" in (got.get("date_src") or "") or "!" in (got.get("venue_src") or ""): notes.append(f"date/venue flagged: {got.get('date_src')} / {got.get('venue_src')}")
     if note_extra: notes.append(note_extra)
-    sync = "✓" if info else "⏳ 未确认"
+    sync = "ok" if info else "unconfirmed"
     return (f"| `{got['key']}` | {got['title']} | {got['collection']}" + (f" + {got['also']}" if got.get("also") else "") +
-            f" | {', '.join(t for t in got['tags_written'] if t != 'notion')} | {'✓' if got['pdf_ok'] else '✗'} | 同步{sync}。" + ("；".join(notes) or "—") + " |")
+            f" | {', '.join(t for t in got['tags_written'] if t != 'notion')} | {'yes' if got['pdf_ok'] else 'no'} | sync {sync}. " + ("; ".join(notes) or "—") + " |")
 
 
 def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150, commit=True):
-    """入库 + 核对 + 提交日志 + 汇报行。save 和 add 共用。"""
+    """Save + verify + commit log + report row. Shared by add and save."""
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
     got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
     info = verify(got["key"], wait=wait) if wait else None
-    git_msg = commit_log(f"日志：收 {got['short']}") if commit else "未提交（--no-commit）"
-    print(f"  git     : {git_msg}")
+    git_msg = commit_log(f"log: add {got['short']}") if commit else "not committed (--no-commit)"
+    print(f"  git       : {git_msg}")
     row = report_row(got, sg, info)
     print("\n" + row + "\n")
     return got, row
-
-
-HEADER = "| key | 标题 | 分类 | 标签 | PDF | 备注 |\n|---|---|---|---|---|---|"
 
 
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True, dry_run=False,
@@ -104,19 +116,20 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
     for link in links:
         try: m = fetch.fetch_one(link)
         except Exception as e:
-            print(f"=== {link}\n  ✗ {e}\n"); rows.append(f"| — | {link} | — | — | — | ✗ {str(e)[:120]} |"); continue
+            print(f"=== {link}\n  x {e}\n"); rows.append(f"| — | {link} | — | — | — | x {str(e)[:120]} |"); continue
         sg = suggest_for(m)
         brief(m, sg)
         if m.get("duplicate") and not force:
-            d = m["duplicate"]; print(f"  → 重复，跳过（--force 才再加）\n"); fetch.clear(m["slug"])
-            rows.append(f"| `{d['key']}` | {d['title']} | — | — | — | 重复，库里已有，跳过 |"); continue
+            d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
+            rows.append(f"| `{d['key']}` | {d['title']} | — | — | — | duplicate, already in the library, skipped |"); continue
         coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
         if dry_run:
-            print(f"  [dry-run] 会入库：{coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
-        if not collection and any(any(p in f for p in PAUSE_FLAGS) for f in sg["flags"]):
-            print(f"  ⏸ 分类拿不准，没入库。定了以后跑：\n     python3 zc.py save {m['slug']} --collection \"{coll}\"" +
-                  (f" --also \"{also_}\"" if also_ else "") + (f" --tags {','.join(t for t in tags_ if t != 'status:to-read')}" if [t for t in tags_ if t != 'status:to-read'] else "") + "\n")
-            rows.append(f"| ⏸ | {m['proposed_title']} | {coll}? | {', '.join(tags_)} | {'✓' if m.get('pdf_src') else '✗'} | 分类待定：{'；'.join(sg['flags'])} |"); continue
+            print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
+        if not collection and paused(sg):
+            extra = ",".join(t for t in tags_ if not t.startswith("status:"))
+            print(f"  PAUSE: collection uncertain, not saved. Decide, then run:\n     python3 zc.py save {m['slug']} --collection \"{coll}\"" +
+                  (f" --also \"{also_}\"" if also_ else "") + (f" --tags {extra}" if extra else "") + "\n")
+            rows.append(f"| PAUSE | {m['proposed_title']} | {coll}? | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | collection undecided: {'; '.join(f for f in sg['flags'] if 'BOUNDARY' in f)} |"); continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
         rows.append(row)
     print("\n" + HEADER + "\n" + "\n".join(rows))
@@ -125,9 +138,119 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
 
 def save(slug, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True,
          venue=None, date_=None, name=None, url=None, short=None):
-    """fetch 过、需要人定分类/标签之后的入库：不给 --tags 就用脚本建议的标签。"""
+    """Save something already fetched (after a PAUSE, or after `zc.py fetch`). Without --tags the script's suggestion is used."""
     m = fetch.load(slug); sg = suggest_for(m)
     coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
     got, row = finish(slug, m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
     print("\n" + HEADER + "\n" + row)
     return got
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# tidy — items the user dropped into Zotero by hand
+# ---------------------------------------------------------------------------------------------------------------------
+def _arxiv_id_of(r, text):
+    for blob in (r.get("doi") or "", r.get("url") or "", r.get("extra") or ""):
+        if "arxiv" in blob.lower():
+            g = re.search(ARXIV_ID, blob)
+            if g: return g.group(1)
+    g = re.search(r"arXiv:" + ARXIV_ID, (text or "").split("\f")[0])
+    return g.group(1) if g else None
+
+
+def untidy_items(rows, only=None):
+    """Items with no status tag: those are the ones nobody has organized yet. With `only`, the named items regardless."""
+    out = []
+    for r in rows:
+        if only and r["key"] not in only: continue
+        if not only and any(t.startswith("status:") for t in r["tags"]): continue
+        if r["type"] in ("attachment", "note", "annotation"): continue
+        out.append(r)
+    return out
+
+
+def plan_item(r):
+    """Everything tidy would write for one item: metadata fixes, title, url, short title, tags, collection."""
+    text = pdf_text(os.path.join(DATA_DIR, r["pdfs"][0])) if r.get("pdfs") and os.path.exists(os.path.join(DATA_DIR, r["pdfs"][0])) else ""
+    fields = {}; notes = []
+    m = None; aid = _arxiv_id_of(r, text)
+    if aid:
+        try: m = meta_arxiv(aid)
+        except Exception as e: notes.append(f"arXiv metadata failed ({e})")
+    elif r.get("doi"):
+        try: m = meta_crossref(r["doi"])
+        except Exception as e: notes.append(f"Crossref metadata failed ({e})")
+    elif r.get("url") and "arxiv.org" not in r["url"]:
+        try: m = meta_page(r["url"])
+        except Exception as e: notes.append(f"page metadata failed ({e})")
+    old_date, old_venue, title = split_prefix(r["title"]); abstract = r.get("abstract", "")
+    if m:
+        if not title or len(title) < 8 or title.lower().endswith(".pdf"): title = m["title"]
+        if not abstract: abstract = m["abstract"]; fields["abstractNote"] = abstract
+        if not r.get("authors"): fields["creators"] = m["authors"]
+        if m["source"] == "arxiv" and not r.get("doi"): fields["DOI"] = m["item"]["DOI"]
+        if m["source"] == "arxiv": lookup_published(m, text or None)
+        date_ = fmt_date(m["date"]); venue = m.get("venue") or "????"; src = f"{m['date_src']} / {m['venue_src']}"
+    else:
+        date_ = fmt_date((r.get("date") or "")[:10]); venue = "????"; src = "item date; no arXiv id / DOI / page -> venue unknown"
+        notes.append("no arXiv id / DOI: date from the item, venue left as ????")
+    if old_date and (date_ in ("????", "") or len(old_date) > len(date_)): date_ = old_date          # never make an existing prefix worse
+    if old_venue and (venue in ("????", "arXiv") or old_venue == venue): venue = old_venue
+    if not text and not abstract: notes.append("no PDF text and no abstract: nothing to classify from")
+    sg = llm.suggest(title, abstract, text, has_pdf=bool(text))
+    new_title = f"[{date_}] [{venue}] {title}"
+    if new_title != r["title"]: fields["title"] = new_title
+    urls = project_urls(m or {"abstract": abstract}, text or None, pdf=os.path.join(DATA_DIR, r["pdfs"][0]) if r.get("pdfs") else None)
+    proj = next((u for u in urls if project_url_score(u, text or None)), None)
+    cur_url = r.get("url") or ""
+    same = lambda u: re.sub(r"^https?://(www\.)?", "", u).rstrip("/").lower()
+    if proj and same(proj) != same(cur_url): fields["url"] = proj
+    elif not cur_url and m: fields["url"] = m["url"]
+    if not r.get("shortTitle"): fields["shortTitle"] = short_title(title)
+    coll, also, tags = decide(sg)
+    have = set(r["tags"]); add_tags = [t for t in tags if t not in have]
+    colls = [c for c in ([coll] + ([also] if also else [])) if c not in r["collections"]]
+    return dict(key=r["key"], old_title=r["title"], title=new_title, fields=fields, tags=add_tags, collections=colls, sg=sg, src=src,
+                notes=notes, abstract=abstract, has_text=bool(text))
+
+
+def tidy(only=None, write=True, wait=0, commit=True, collection=None):
+    rows = localdb.load(refresh=True)
+    todo = untidy_items(rows, only)
+    if not todo: print("nothing to tidy: every item already carries a status tag"); return []
+    env = zapi.env_or_die(); ck, _ = zapi.remote_collections(env)
+    out = []
+    for r in todo:
+        p = plan_item(r); sg = p["sg"]
+        print(f"=== {p['key']} | {p['old_title'][:80]}")
+        print(f"  title     : {p['title']}   ({p['src']})")
+        for k, v in p["fields"].items():
+            if k != "title": print(f"  {k:<10}: {str(v)[:100]}")
+        print(classify.fmt(sg)); l = llm.fmt_llm(sg)
+        if l: print(l)
+        for n in p["notes"]: print(f"  ! {n}")
+        coll = collection or sg["collection"]
+        if not collection and paused(sg):
+            print(f"  PAUSE: collection uncertain, not written. Decide, then run: python3 zc.py tidy --only {p['key']} --collection \"{coll}\"\n")
+            out.append(f"| PAUSE | {p['title']} | {coll}? | {', '.join(p['tags'])} | {'yes' if r['pdfs'] else 'no'} | collection undecided: {'; '.join(f for f in sg['flags'] if 'BOUNDARY' in f)} |"); continue
+        if not write:
+            print(f"  [dry-run] would write: {coll} | +{', '.join(p['tags'])} | fields {list(p['fields'])}\n"); continue
+        st, it = zapi.get_item(env, p["key"])
+        if st != 200: print(f"  x not on the server ({st}); sync Zotero first\n"); continue
+        d = it["data"]; patch = {}
+        for k, v in p["fields"].items():
+            if k == "creators" and d.get("creators"): continue
+            if d.get(k, "") != v: patch[k] = v
+        want_c = [ck[c] for c in ([coll] + ([sg["also"]] if sg["also"] else [])) if c in ck and ck[c] not in d["collections"]]
+        if want_c: patch["collections"] = d["collections"] + want_c
+        have = {t["tag"] for t in d["tags"]}; new_tags = [t for t in p["tags"] if t not in have]
+        if new_tags: patch["tags"] = d["tags"] + [{"tag": t, "type": 0} for t in new_tags]
+        if patch: zapi.patch(env, p["key"], it["version"], patch)
+        zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | +collection: {', '.join(c for c in [coll, sg['also']] if c)} | +tags: {', '.join(new_tags)} | fields: {', '.join(k for k in patch if k not in ('tags', 'collections'))} | {p['src']}")
+        info = verify(p["key"], wait=wait, quiet=True) if wait else None
+        got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
+        row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))
+        print("\n" + row + "\n"); out.append(row)
+    if write and commit: print("  git       : " + commit_log("log: tidy " + ", ".join(r["key"] for r in todo)))
+    print("\n" + HEADER + "\n" + "\n".join(out))
+    return out

@@ -1,5 +1,7 @@
-"""经 Zotero 桌面端 connector 接口（127.0.0.1:23119）入库：saveItems（建条目）→ updateSession（进分类 + 手动标签）→ saveAttachment（PDF）。
-PDF 必须让 Zotero 自己存：本机附件同步是 WebDAV，Web API 上传的文件客户端拿不到。请求 UA 不能以 Mozilla/ 开头。"""
+"""Save through the Zotero desktop connector endpoint (127.0.0.1:23119) — the same API the browser connector uses:
+saveItems (create the item) -> updateSession (collection + manual tags) -> saveAttachment (PDF bytes).
+The PDF must be stored by Zotero itself: with WebDAV attachment sync, files uploaded through the Web API never reach
+the clients. The request User-Agent must not start with "Mozilla/"."""
 import hashlib, json, os, time, urllib.error, urllib.request
 from datetime import date
 
@@ -7,7 +9,7 @@ from . import fetch, localdb, zapi
 from .config import INBOX
 from .http import http, UA_LOCAL
 from .titles import make_title, short_title
-from .vocab import COLLECTIONS, check_tags
+from .taxonomy import COLLECTIONS, DEFAULT_STATUS, check_tags
 
 CONNECTOR = "http://127.0.0.1:23119"
 
@@ -30,36 +32,36 @@ def connector(path, body=None, headers=None):
 
 def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, force=False, url=None, short=None):
     m = fetch.load(slug)
-    if m.get("duplicate") and not force: raise RuntimeError(f"库里已有 {m['duplicate']['key']} | {m['duplicate']['title']}；确认要加就 --force")
-    if collection not in COLLECTIONS or (also and also not in COLLECTIONS): raise RuntimeError(f"分类只能是 {COLLECTIONS}")
+    if m.get("duplicate") and not force: raise RuntimeError(f"already in the library: {m['duplicate']['key']} | {m['duplicate']['title']} (use --force to add anyway)")
+    if collection not in COLLECTIONS or (also and also not in COLLECTIONS): raise RuntimeError(f"collection must be one of {COLLECTIONS}")
     tags = [t.strip() for t in tags if t.strip()]
-    if not any(t.startswith("status:") for t in tags): tags.append("status:to-read")
+    if not any(t.startswith("status:") for t in tags): tags.append("status:" + DEFAULT_STATUS)
     check_tags(tags)
     title = make_title(m, name=name, venue=venue, date_=date_)
     item = dict(m["item"], id=slug, title=title, shortTitle=short or short_title(title))
-    item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL 字段 = 项目页优先（Notion 那边显示的就是它）
+    item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL field = project page when we have one (that is what the Notion column shows)
     pdf = os.path.join(INBOX, slug + ".pdf")
-    if not ping(): raise RuntimeError("Zotero 桌面端没在跑（connector 23119 不通）")
+    if not ping(): raise RuntimeError("Zotero desktop is not running (connector port 23119 unreachable)")
     sid = hashlib.sha1(f"{slug}{time.time()}".encode()).hexdigest()[:8]
     st, body = connector("/connector/saveItems", {"sessionID": sid, "uri": m["url"], "items": [item]})
-    if st != 201: raise RuntimeError(f"saveItems 失败 {st}: {body[:300]}")
+    if st != 201: raise RuntimeError(f"saveItems failed {st}: {body[:300]}")
     st, body = connector("/connector/updateSession", {"sessionID": sid, "target": f"C{localdb.collection_id(collection)}", "tags": tags})
-    if st != 200: raise RuntimeError(f"updateSession 失败 {st}: {body[:300]}（条目已建，标签/分类没落）")
+    if st != 200: raise RuntimeError(f"updateSession failed {st}: {body[:300]} (item created, but tags / collection were not applied)")
     pdf_ok = False
     if os.path.exists(pdf):
         meta = json.dumps({"sessionID": sid, "parentItemID": slug, "title": "Full Text PDF", "url": m.get("pdf_src") or m["url"]})
         st, body = connector("/connector/saveAttachment?sessionID=" + sid, open(pdf, "rb").read(), headers={"X-Metadata": meta, "Content-Type": "application/pdf"})
         pdf_ok = st == 201
-        if not pdf_ok: print(f"  ⚠ saveAttachment 失败 {st}: {body[:300]}")
+        if not pdf_ok: print(f"  ! saveAttachment failed {st}: {body[:300]}")
     time.sleep(1)
     got = localdb.item_by_title(title)
-    if not got: raise RuntimeError("connector 回了 201 但本地库里查不到这个标题，去 Zotero 里看看")
+    if not got: raise RuntimeError("connector returned 201 but the title is not in the local database — check Zotero")
     missing = [f for f in got["files"] if not os.path.exists(f)]
-    print(f"入库 {got['key']} | {title}\n  分类: {got['collections']}\n  标签: {sorted(got['tags'])}\n  PDF : {got['files'] or '无'}" + (f"  ⚠ 文件缺失 {missing}" if missing else ""))
+    print(f"saved {got['key']} | {title}\n  collections: {got['collections']}\n  tags: {sorted(got['tags'])}\n  PDF : {got['files'] or 'none'}" + (f"  ! missing files {missing}" if missing else ""))
     extra = ""
     if also:
         try: extra = " | +collection(web api): " + also + " " + zapi.add_collection(got["key"], also)
-        except Exception as e: extra = f" | ⚠ 第二分类 {also} 没加上（{e}），稍后 python3 zc.py collect {got['key']} \"{also}\""
+        except Exception as e: extra = f" | ! second collection {also} not added ({e}); later: python3 zc.py collect {got['key']} \"{also}\""
     zapi.log(f"## {date.today()} — download",
              f"- {got['key']} | {title} | +collection: {collection}{extra} | +tags: {', '.join(tags)} | pdf: {'ok' if pdf_ok else 'missing'} | src: {m.get('link')}")
     fetch.clear(slug)

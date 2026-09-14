@@ -1,30 +1,31 @@
-"""批量整理（approval mode）：按 proposals/proposal.py 里批准的提案写 Zotero（Web API v3，PATCH 语义批量 POST）。
+"""Batch changes in approval mode: apply what proposals/proposal.py declares (Web API v3, PATCH-semantics batch POST).
 
-  python3 zc.py apply --dry-run                 # 离线：用本地 sqlite 的 version / collection key 构造载荷，不联网、不写
-  python3 zc.py apply --plan                    # 联网只读：核对远端版本与本地是否一致，列出将写的内容
-  python3 zc.py apply --apply [--only K1,K2] [--no-rename] [--no-status]   # 真写，逐批追加 logs/zotero-organize.log.md
+  python3 zc.py apply --dry-run     # offline: build payloads from the local sqlite (version / collection keys), write nothing
+  python3 zc.py apply --plan        # online, read-only: compare server and local versions, list what would be written
+  python3 zc.py apply --apply [--only K1,K2] [--no-rename] [--no-status]   # write, logging every batch
 
-规则：只增标签/分类、不删任何东西；自动标签(type=1)原样保留；只改 RENAMES 里的标题。
-例外只有三个：RETAG（词表改名）会从条目上摘掉旧标签；UNTAG 摘掉某条目贴错的标签；UNCOLLECT 会把条目移出指定分类。
+Rules: only add tags / collections, never delete; automatic tags (type=1) are kept; only titles listed in RENAMES change.
+The three exceptions that remove something: RETAG (vocabulary rename) drops the old tag from every item carrying it;
+UNTAG drops a wrongly assigned tag from one item; UNCOLLECT moves an item out of a collection.
 """
 import argparse, datetime, importlib.util, json, sys
 
 from .config import LOG, PROPOSAL_PY, connect_ro
-from .vocab import COLLECTIONS as ROOTS, FAMILIES
-from .zapi import req, env_or_die
+from .taxonomy import COLLECTIONS as ROOTS, FAMILIES
+from .zapi import req, env_or_die, remote_collections
 
 spec = importlib.util.spec_from_file_location("proposal", PROPOSAL_PY)
 proposal = importlib.util.module_from_spec(spec); spec.loader.exec_module(proposal)
 P, RENAMES = proposal.P, proposal.RENAMES
-RETAG = getattr(proposal, "RETAG", {})   # 旧标签→新标签，作用于库里所有带旧标签的条目（不限于 P）
-UNCOLLECT = getattr(proposal, "UNCOLLECT", {})   # key → 要移出的分类名列表
-UNTAG = getattr(proposal, "UNTAG", {})           # key → 要摘掉的标签列表（贴错的）
+RETAG = getattr(proposal, "RETAG", {})           # old tag -> new tag, applied to every item in the library that has the old tag
+UNCOLLECT = getattr(proposal, "UNCOLLECT", {})   # key -> collections to leave
+UNTAG = getattr(proposal, "UNTAG", {})           # key -> tags to remove (assigned in error)
 
 
 def target_keys(con):
-    """要处理的条目：P 里的 + 库里带 RETAG 旧标签的（后者可能不在 P 里，比如 /download 收的）。"""
+    """Items to touch: those in P plus every item carrying a RETAG old tag (which may not be in P, e.g. added by /download)."""
     trashed = {k for (k,) in con.execute("select key from items where itemID in (select itemID from deletedItems)")}
-    keys = set(P) - trashed   # 回收站里的（如用户扔掉的 Z6QB6YQG）远端 GET /items 看不到，跳过
+    keys = set(P) - trashed                       # trashed items are invisible to GET /items; skip them
     for old in RETAG:
         keys |= {k for (k,) in con.execute("""select i.key from itemTags it join tags t on t.tagID=it.tagID
             join items i on i.itemID=it.itemID where t.name=? and i.itemID not in (select itemID from deletedItems)""", (old,))}
@@ -32,7 +33,7 @@ def target_keys(con):
 
 
 def local_state():
-    """从本地库读：每个条目的 version / title / 现有 tags(含 type) / 现有 collection keys；分类名→key。"""
+    """From the local database: version / title / tags (with type) / collection keys per item; collection name -> key."""
     con = connect_ro()
     colls = {name: key for key, name in con.execute("select key, collectionName from collections")}
     items = {}; keys = target_keys(con)
@@ -57,24 +58,22 @@ def desired_tags(key, with_status=True):
 
 
 def build_updates(items, colls, only=None, rename=True, status=True):
-    """返回 [(key, patch_obj, human_diff)]；无变化的条目不含在内。"""
+    """[(key, patch, human-readable diff)] — unchanged items are omitted."""
     missing_roots = [r for r in ROOTS if r not in colls]
     updates = []
     for key in sorted(items, key=lambda k: (k not in P, k)):
         if only and key not in only: continue
         cur = items[key]; patch = {"key": key, "version": cur["version"]}; diff = []
         have = {t["tag"] for t in cur["tags"]}
-        # RETAG：摘掉旧标签，补上新标签（新标签已有就只摘）
-        old = [t for t in have if t in RETAG] + [t for t in UNTAG.get(key, []) if t in have]
+        old = [t for t in have if t in RETAG] + [t for t in UNTAG.get(key, []) if t in have]          # RETAG / UNTAG: drop old, add new
         keep = [t for t in cur["tags"] if t["tag"] not in RETAG and t["tag"] not in UNTAG.get(key, [])]
         want = [RETAG[t] for t in sorted(old) if t in RETAG and RETAG[t] not in have]
-        if key in P:
-            # status 不降级：已有 status:* 则不再加
+        if key in P:                                                                                # status never downgrades
             want += [t for t in desired_tags(key, status and not any(t.startswith("status:") for t in have)) if t not in have and t not in want]
         if want or old:
             patch["tags"] = keep + [{"tag": t} for t in want]
             if want: diff.append("+tags: " + ", ".join(want))
-            if old: diff.append("−tags: " + ", ".join(sorted(old)))
+            if old: diff.append("-tags: " + ", ".join(sorted(old)))
         if key not in P:
             if len(patch) > 2: updates.append((key, patch, diff))
             continue
@@ -84,8 +83,8 @@ def build_updates(items, colls, only=None, rename=True, status=True):
         if want_c or drop_c:
             patch["collections"] = [c for c in cur["collections"] if c not in drop_c] + want_c
             if want_c: diff.append("+collection: " + ", ".join(n for n in P[key][0] if n in colls and colls[n] in want_c))
-            if drop_c: diff.append("−collection: " + ", ".join(n for n in UNCOLLECT[key] if n in colls and colls[n] in drop_c))
-        if need_c: diff.append("(待建分类: " + ", ".join(need_c) + ")")
+            if drop_c: diff.append("-collection: " + ", ".join(n for n in UNCOLLECT[key] if n in colls and colls[n] in drop_c))
+        if need_c: diff.append("(collection to create: " + ", ".join(need_c) + ")")
         if rename and key in RENAMES and cur["title"] != RENAMES[key]:
             patch["title"] = RENAMES[key]; diff.append(f"title: {cur['title'][:40]!r} -> {RENAMES[key][:60]!r}")
         if len(patch) > 2 or need_c:
@@ -93,12 +92,8 @@ def build_updates(items, colls, only=None, rename=True, status=True):
     return updates, missing_roots
 
 
-# ---------------- Web API ----------------
-from .zapi import remote_collections
-
-
 def remote_state(env):
-    """从 Web API 拉提案涉及条目的当前 version / title / tags / collections（以远端为准构造载荷）。"""
+    """Current version / title / tags / collections of the affected items from the Web API (payloads are built from this)."""
     con = connect_ro()
     keys = sorted(target_keys(con)); out = {}
     for i in range(0, len(keys), 50):
@@ -126,46 +121,43 @@ def run(argv):
     updates, missing_roots = build_updates(items, colls, only, not a.no_rename, not a.no_status)
 
     if a.dry_run or not (a.plan or a.apply):
-        print(f"[dry-run] 待建根分类: {missing_roots or '无'}；将更新 {len(updates)} 条（共 {len(P)} 条提案）")
+        print(f"[dry-run] collections to create: {missing_roots or 'none'}; {len(updates)} items to update ({len(P)} proposal rows)")
         n_tags = sum(len(d[7:].split(", ")) for _, _, ds in updates for d in ds if d.startswith("+tags: "))
-        n_rm = sum(1 for _, _, ds in updates if any(d.startswith("−tags") for d in ds))
+        n_rm = sum(1 for _, _, ds in updates if any(d.startswith("-tags") for d in ds))
         n_coll = sum(1 for _, p, _ in updates if 'collections' in p); n_title = sum(1 for _, p, _ in updates if 'title' in p)
-        print(f"  +tags {n_tags} 个, 摘旧标签(RETAG) {n_rm} 条, +collection {n_coll} 条, 改标题 {n_title} 条")
+        print(f"  +{n_tags} tags, {n_rm} items lose tags (RETAG/UNTAG), +collection on {n_coll}, {n_title} titles")
         for k, p, d in updates[:8]: print("  ", k, "|", " | ".join(d))
-        print("  …"); return
+        print("  ..."); return
 
     env = env_or_die()
     rnames, rdata = remote_collections(env)
     remote = remote_state(env)
     absent = [k for k in items if k not in remote]
-    # 本地有未上传改动的条目 → 停，避免客户端下次同步时冲突
-    con = connect_ro()
+    con = connect_ro()                                                                  # local changes not yet uploaded -> stop (sync conflicts)
     unsynced = [k for (k,) in con.execute("select key from items where synced=0") if k in items]
-    # 远端与本地内容差异（只报告，不阻塞；载荷以远端为准）
-    content_drift = [k for k in items if k in remote and (
+    content_drift = [k for k in items if k in remote and (                               # reported only; payloads follow the server
         remote[k]["title"] != items[k]["title"] or {t["tag"] for t in remote[k]["tags"]} != {t["tag"] for t in items[k]["tags"]}
         or set(remote[k]["collections"]) != set(items[k]["collections"]))]
-    print(f"远端分类: {sorted(rnames)}\n远端不存在: {absent}  本地未同步(synced=0): {unsynced}  远端/本地内容有差异: {content_drift}")
+    print(f"server collections: {sorted(rnames)}\nmissing on server: {absent}  local unsynced (synced=0): {unsynced}  server/local drift: {content_drift}")
     if absent or unsynced:
-        sys.exit("!! 先在 Zotero 里同步一次再跑（远端缺条目或本地有未上传改动）。")
-    items = remote  # 以远端状态构造载荷
+        sys.exit("!! sync Zotero first (items missing on the server, or local changes not uploaded).")
+    items = remote
     colls = {**colls, **rnames}
     updates, missing_roots = build_updates(items, colls, only, not a.no_rename, not a.no_status)
     if a.plan:
-        print(f"[plan] 待建根分类: {missing_roots or '无'}；将更新 {len(updates)} 条")
+        print(f"[plan] collections to create: {missing_roots or 'none'}; {len(updates)} items to update")
         for k, p, d in updates: print(k, "|", " | ".join(d))
         return
 
-    # ---- 真写 ----
     today = datetime.date.today().isoformat()
-    log([f"\n## {today} — batch 0（分类）", "### Applied"])
+    log([f"\n## {today} — batch 0 (collections)", "### Applied"])
     for name in missing_roots:
         st, _, js = req(env, "POST", "/collections", [{"name": name}])
         ok = st == 200 and js and js.get("successful")
-        if not ok: sys.exit(f"新建分类 {name} 失败: {st} {js}")
+        if not ok: sys.exit(f"creating collection {name} failed: {st} {js}")
         newkey = list(js["successful"].values())[0]["key"]; rnames[name] = newkey
-        log([f"- {newkey} | 新建根分类 `{name}`"]); print("新建分类", name, newkey)
-    colls = {**colls, **rnames}  # 含新建的 Misc
+        log([f"- {newkey} | created collection `{name}`"]); print("created collection", name, newkey)
+    colls = {**colls, **rnames}
     updates, _ = build_updates(items, colls, only, not a.no_rename, not a.no_status)
     for i in range(0, len(updates), 50):
         batch = updates[i:i + 50]
@@ -181,9 +173,7 @@ def run(argv):
             log(["### Failed"] + [f"- {batch[int(ix)][0]} | {f.get('code')} {f.get('message')}" for ix, f in failed.items()])
         print(f"batch {i//50+1}: ok={len(succ)} unchanged={len(unch)} failed={len(failed)}  lib-version={hdr.get('Last-Modified-Version')}")
         if failed: print(json.dumps(failed, ensure_ascii=False, indent=1)); sys.exit(1)
-    # Uncertain 段
-    unc = [(k, P[k][7]) for k in P if "Uncertain" in P[k][7] or "请定" in P[k][7] or "存疑" in P[k][7] or "不确定" in P[k][7]]
+    unc = [(k, P[k][7]) for k in P if "uncertain" in P[k][7].lower()]
     log(["### Uncertain"] + [f"- {k} | {items[k]['title'][:50]} | {n}" for k, n in unc if k in items and k in {u[0] for u in updates}])
     log(["### Proposed new tags"] + [f"- {t} | {w} | {it}" for t, w, it in proposal.NEW_TAGS])
-    print("完成。日志:", LOG)
-
+    print("done. log:", LOG)

@@ -1,0 +1,441 @@
+# taxonomy.toml — the library's taxonomy: collections, controlled tag vocabulary, venue abbreviations.
+# This is the single source of truth for what the classifier (rules + local LLM) may assign. Edit this file, not the code.
+#
+# Conventions
+#   * Tags are `family:value`, lowercase, hyphenated. Every item carries exactly one status on the reading axis.
+#   * `patterns` are case-insensitive regexes (a pattern containing an upper-case letter is matched case-sensitively,
+#     so hardware names like "Panda" or acronyms like "RL" don't match ordinary words). `weak` patterns count half.
+#   * Evidence tiers: a hit in the title/abstract is the paper speaking for itself; body hits must reach `sure`
+#     (weighted count: strong=1, weak=0.5, after the reference list is cut) to be assigned, `maybe` to be listed as a candidate.
+#   * `head = false`: a title/abstract mention alone is not enough (e.g. "data collected via teleoperation" is not a teleop paper).
+#   * The `description` lines are what the local LLM reads — keep them precise; they are the actual policy.
+
+[library]
+default_status = "to-read"
+keep_bare_tags = ["notion"]           # un-prefixed tags that are allowed (added by plugins)
+negative_context = "(unlike|without|instead of|rather than|compared (to|with)|not (require|rely|need)|beyond|alternative to|in contrast to|limitations? of|prior|existing|previous|conventional|traditional|alternatives? (such as|like)|categorized|strategies|approaches|methods|such as)\\b[^.]{0,50}$"
+# ^ a method mentioned in the abstract right after one of these words is context, not the paper's own method
+
+[llm]
+# Which families the local model may promote from "candidate" to "assigned" (it never overrides the rules' sure tags or the
+# collection). Measured on this library with qwen3.5:9b: letting the model decide method / modality lowered precision
+# (it tags "imitation learning" and "vision" far too readily); embod / tech / base gained recall at little cost.
+adjudicate_families = ["embod", "tech", "base"]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Collections — evaluated in this order; the first one whose conditions hold wins; `default = true` is the fallback.
+# ---------------------------------------------------------------------------------------------------------------------
+[[collections]]
+name = "Evolution Algorithm"
+description = "Evolutionary, genetic and swarm-intelligence optimization (metaheuristics, benchmark functions, engineering design problems)."
+status_only = true                    # items here carry only a status tag
+min_score = 6                         # title/abstract score needed to win
+max_other = 3                         # ...and no other collection may score above this
+patterns = ["evolutionary", "genetic algorithm", "particle swarm", "swarm intelligence", "meta-?heuristic", "differential evolution",
+            "nature-inspired", "bio-inspired", "optimization algorithms?", "\\boptimizer\\b", "grey wolf", "whale optimi", "harmony search",
+            "bee colony", "ant colony", "simulated annealing", "firefly", "cuckoo", "multi-objective", "benchmark functions", "test functions",
+            "CEC ?20\\d\\d", "engineering design problems", "exploration and exploitation", "population-based", "fitness"]
+body_fallback = 15                    # no abstract? win if the body has at least this many hits (and few hits for others)
+
+[[collections]]
+name = "Humanoid"
+description = "The research object is the humanoid robot itself: whole-body control, locomotion / loco-manipulation, humanoid teleoperation and whole-body retargeting, behavior foundation models for humanoids. Manipulation done *on* a humanoid belongs to Dex-Manipulation (with the embod:humanoid tag), not here."
+requires = ["embod:humanoid"]         # only if this tag is assigned
+patterns = ["whole[- ]body", "locomotion", "loco-?manipulation", "humanoid (control|motion|behavio)", "motion (tracking|imitation|retargeting)", "walking", "\\bgait\\b", "bipedal", "legged"]
+not_in_title = ["manipulat", "grasp", "dexterous", "in-hand", "pick[- ]and[- ]place", "bimanual", "tabletop", "assembly", "tool use"]
+boundary_with = "Dex-Manipulation"    # if that collection's boundary_patterns also hit the abstract, flag the boundary and pause
+
+[[collections]]
+name = "Dex-Manipulation"
+description = "Robot manipulation: VLA models, imitation / RL policies, world models for control, dexterous hands, bimanual systems, teleoperation and retargeting, grasp synthesis, hand reconstruction, manipulation benchmarks."
+patterns = ["\\brobots?\\b", "robotic", "manipulat", "grasp", "gripper", "dexterous", "teleoperat", "embodied", "end[- ]effector", "sim-to-real", "humanoid"]
+min_score = 6                         # two abstract hits, or one plus a hardware tag
+tag_bonus = { "embod:*" = 6, "method:vla" = 6, "method:teleop" = 6, "method:grasp-synthesis" = 6, "method:policy-learning" = 3 }   # assigned tags that imply a robot
+title_patterns = ["manipulat", "grasp", "dexterous", "in-hand", "pick[- ]and[- ]place", "bimanual", "tabletop", "assembly", "tool use"]
+boundary_patterns = ["manipulat", "grasp", "dexterous", "in-hand", "pick[- ]and[- ]place", "bimanual", "tabletop", "assembly", "tool use"]   # what "also does manipulation" looks like in an abstract
+boundary_with = "Humanoid"
+boundary_pause = false                # a manipulation paper that also does whole-body control: just note "--also Humanoid"
+
+[[collections]]
+name = "AI Foundation"
+description = "Pure learning, no robot in the loop: general ML/AI classics (PPO, DAgger, GAIL, ResNet, VAE...), foundation models not applied to manipulation, generative modeling, surveys, tools, textbooks."
+default = true
+strip = ["embod", "base"]             # hardware words here are usually simulation environments, not embodiments
+survey_home = true                    # a survey filed elsewhere is also added here
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Tag families
+# ---------------------------------------------------------------------------------------------------------------------
+[families.method]
+description = "Problem type / learning paradigm. One or two per paper."
+max = 2
+
+[families.method.values.vla]
+description = "A pretrained vision-language-action backbone is the policy (OpenVLA, pi0, GR00T...)."
+patterns = ["vision[- ]language[- ]action", "\\bVLAs?\\b"]
+weak = ["\\bOpenVLA\\b|\\bRT-2\\b|\\bGR00T\\b|\\bSmolVLA\\b"]
+sure = 10
+maybe = 3
+implies = ["modality:vision", "modality:language"]      # a VLA consumes images and language by definition
+excludes = ["method:policy-learning"]                   # policy-learning is imitation *without* a large VLA backbone
+
+[families.method.values."policy-learning"]
+description = "Imitation learning without a large VLA backbone: behavior cloning, ACT, diffusion / flow policies trained from demonstrations."
+patterns = ["imitation learning|behaviou?r(al)? cloning|learning from (human )?demonstrations?"]
+weak = ["diffusion polic(y|ies)|action chunking transformer|visuomotor polic(y|ies)"]
+sure = 10
+maybe = 2
+
+[families.method.values.rl]
+description = "Reinforcement learning, including RL post-training of a VLA (then tag both vla and rl)."
+patterns = ["reinforcement learning|\\bRL\\b"]
+weak = ["\\bPPO\\b|reward (function|design|shaping)|policy gradient|actor[- ]critic"]
+sure = 12
+maybe = 3
+
+[families.method.values."world-model"]
+description = "A learned dynamics model used for planning, simulation or training."
+patterns = ["world[- ](action[- ])?models?"]
+weak = ["(learned |neural )?dynamics model|video prediction|model-based (RL|reinforcement|planning)|imagin(ed|ation) rollouts?"]
+sure = 999
+maybe = 3
+
+[families.method.values."foundation-model"]
+description = "A VLM / LLM / backbone that is itself not an action model (only when the paper is not an action model or controller)."
+patterns = ["foundation models?"]
+weak = ["vision[- ]language models?|\\bVLMs?\\b|large language models?|\\bLLMs?\\b|pre-?trained (backbone|encoder|representation)s?|self-supervised (pre-?training|learning)|representation learning"]
+sure = 999
+maybe = 4
+excluded_by = ["method:vla", "method:policy-learning", "method:rl", "method:teleop", "method:grasp-synthesis"]
+
+[families.method.values.teleop]
+description = "Teleoperation systems and human-hand-to-robot-hand retargeting are a contribution of the paper (not merely used to collect demonstrations)."
+patterns = ["teleoperat"]
+weak = ["retarget|data ?gloves?|exoskeleton|motion capture|\\bmocap\\b|VR (headset|controller)|Apple Vision Pro|Meta Quest|hand tracking"]
+sure = 999
+maybe = 4
+head = false
+head_requires = "\\b(we|our)\\b[^.]{0,60}\\b(propose|present|introduce|develop|build|design)\\b[^.]{0,60}(teleoperat|retarget)|(teleoperation|teleop|retargeting) (system|framework|interface|pipeline|device|setup)"
+title_requires = "teleoperat"
+title_maybe = "retarget"                # retargeting in the title: could be teleop, could be pure simulation retargeting — ask
+
+[families.method.values."grasp-synthesis"]
+description = "Grasp pose synthesis / generation."
+patterns = ["grasp (synthesis|generation)|dexterous grasp(ing|s)?\\b"]
+weak = ["grasp (pose|sampling|detection|proposal)s?|grasp candidates"]
+sure = 999
+maybe = 3
+
+[families.embod]
+description = "The embodiment used in the experiments. End-effector (dex-hand / gripper) and arm count (single-arm / bimanual) are independent; tag every platform used; pure simulation counts by its simulated embodiment."
+
+[families.embod.values."dex-hand"]
+description = "Multi-fingered dexterous hand (Allegro, LEAP, Shadow, Inspire, Sharpa, XHand...)."
+patterns = ["dexterous hands?|multi-?finger(ed)? hands?|five-?finger(ed)? hands?|anthropomorphic hands?|robot(ic)? hands?",
+            "\\bAllegro\\b|\\bLEAP hand|\\bShadow hand|\\bInspire\\b|\\bXHand\\b|\\bSharpa\\b|\\bAbility hand|\\bDClaw\\b|\\bLinkerHand|\\bWuji\\b|\\bTesollo\\b|\\bRobotEra\\b|\\bDexHand\\b|\\bBrainCo\\b|\\bMANO\\b|\\bDLR hand"]
+sure = 4
+maybe = 1
+
+[families.embod.values.gripper]
+description = "Parallel-jaw or two-finger gripper (Robotiq, Franka hand, suction)."
+patterns = ["parallel[- ]jaw|\\bRobotiq\\b|2F-85|Franka hand|two-finger grippers?|suction cup"]
+weak = ["\\bgrippers?\\b"]
+sure = 5
+maybe = 1.5
+
+[families.embod.values."single-arm"]
+description = "One robot arm (Franka, UR5, xArm, Kinova, KUKA...)."
+patterns = ["single[- ]arm", "\\bFranka\\b|\\bPanda\\b|\\bUR ?5e?\\b|\\bUR ?10e?\\b|\\bUR ?7e\\b|\\bUR ?3e?\\b|\\bxArm\\b|\\bKinova\\b|\\bKUKA\\b|\\biiwa\\b|\\bWidowX\\b|\\bFlexiv\\b|\\bRizon\\b|\\bRealMan\\b|\\bRM-65\\b|\\bSawyer\\b|\\bJaco\\b|\\bPiper\\b|\\bSO-?10[01]\\b|\\bKoch\\b|\\bViperX\\b|\\b7-DoF arm"]
+weak = ["robot(ic)? arms?"]
+sure = 3
+maybe = 1
+
+[families.embod.values.bimanual]
+description = "Two arms or two hands used in the experiments (coordinated or not); floating two-hand setups count too."
+patterns = ["bimanual|dual[- ]arm|two[- ]arm(ed|s)?|both arms|two robot hands|two[- ]handed", "\\bALOHA\\b|Mobile ALOHA|\\bAgileX\\b|\\bARX\\b|\\bBiPi\\b"]
+sure = 5
+maybe = 1.5
+excludes = [{ tag = "embod:single-arm", unless = "single[- ]arm", min = 3 }]   # arm names in a bimanual paper are its two arms, unless it also says single-arm
+
+[families.embod.values.humanoid]
+description = "The policy runs on a full humanoid robot (Unitree G1/H1, Fourier, TienKung, Galaxea R1, wheeled humanoids too). Two arms on a fixed torso (ALOHA-style) is not a humanoid; a MuJoCo Humanoid benchmark environment is not either."
+patterns = ["humanoid robots?|humanoids?\\b(?=[^.]{0,40}(robot|control|whole[- ]body|locomotion|loco|polic|platform|teleop|hardware))",
+            "\\bUnitree (G1|H1)|\\bFourier (GR|N1)|\\bBooster T1|\\bTienKung|\\bTien Kung|\\bGalaxea R1|\\bDexmate\\b|\\bFigure 0[12]|\\bEngineAI\\b|\\bAgiBot\\b|\\bBerkeley Humanoid|\\bG1 humanoid|\\bH1 humanoid"]
+sure = 6
+maybe = 1.5
+
+[families.tech]
+description = "Mechanisms worth searching across papers. Only substantive components of the paper's contribution — a mention in related work or a baseline does not count."
+
+[families.tech.values."action-chunking"]
+description = "Predicts chunks of future actions (temporal ensembling etc.)."
+patterns = ["action[- ]chunk(ing|s|ed)?|chunked actions?|temporal ensembl"]
+sure = 3
+maybe = 1
+
+[families.tech.values."flow-matching"]
+description = "Flow matching / rectified flow as the action generator."
+patterns = ["flow[- ]matching|rectified flow|conditional flow"]
+sure = 3
+maybe = 1
+excludes = [{ tag = "tech:diffusion", unless_title = "diffusion" }]   # a flow-matching paper's abstract mentions diffusion as the thing it replaces
+
+[families.tech.values.diffusion]
+description = "Diffusion model as the policy / action generator."
+patterns = ["diffusion (polic(y|ies)|models?|transformers?|process|head|decoder)|denoising|\\bDDPM\\b|\\bDDIM\\b|score[- ]based"]
+sure = 999
+maybe = 7.5
+
+[families.tech.values.transformer]
+description = "Transformer as the policy / model architecture."
+patterns = ["transformer(-based| encoder| decoder| backbone| polic(y|ies)| architecture)|\\bViT\\b|vision transformer"]
+weak = ["\\btransformers?\\b|self-attention|cross-attention"]
+sure = 7.5
+maybe = 3
+
+[families.tech.values.hil]
+description = "Human corrections / interventions during training (human-in-the-loop, HG-DAgger)."
+patterns = ["human[- ]in[- ]the[- ]loop|human (intervention|correction)s?|interactive imitation|\\bHG-DAgger|intervention data|human feedback during"]
+sure = 15
+maybe = 1.5
+
+[families.tech.values."latent-cot"]
+description = "Explicit or latent reasoning before acting (chain-of-thought, embodied reasoning, subtask prediction)."
+patterns = ["chain[- ]of[- ]thought|\\bCoT\\b|embodied reasoning|latent reasoning|reasoning (tokens|traces|steps)|think(ing)? before act|subtask prediction"]
+sure = 999
+maybe = 2.5
+
+[families.base]
+description = "The pretrained backbone that is actually fine-tuned or frozen. Not for models trained from scratch, 'architecturally similar' models, baselines, or the paper that introduces the model itself."
+context = "fine-?tun\\w*|finetun\\w*|initializ\\w*|built (up)?on|post-?train\\w*|fr(eez|ozen)\\w*|starting from|adapt\\w*|checkpoints?|pre-?trained weights|as (our|the) (base|backbone|initialization)"
+# ^ the model name must co-occur with one of these within a sentence; abstract co-occurrence = sure, body-only = candidate
+
+[families.base.values.pi0]
+description = "Physical Intelligence pi0."
+patterns = ["\\bπ0\\b|\\bπ_?0\\b(?![.\\d])|\\bpi[_-]?0\\b(?![.\\d])|\\bpi-zero\\b"]
+
+[families.base.values."pi0.5"]
+description = "Physical Intelligence pi0.5."
+patterns = ["π_?0\\.5|pi[_-]?0\\.5"]
+excludes = ["base:pi0"]
+
+[families.base.values."pi0.6"]
+description = "Physical Intelligence pi0.6."
+patterns = ["π_?0\\.6|pi[_-]?0\\.6"]
+
+[families.base.values.gr00t]
+description = "NVIDIA GR00T."
+patterns = ["\\bGR00T\\b|\\bGROOT\\b"]
+
+[families.modality]
+description = "Inputs the policy / model actually consumes. Do not assume vision or language."
+
+[families.modality.values.vision]
+description = "RGB images / camera observations are policy input."
+patterns = ["\\bRGB\\b|wrist cameras?|camera images?|image observations?|visual observations?|visual inputs?|from (raw )?pixels|monocular|stereo cameras?|\\bcameras?\\b|egocentric|visuomotor"]
+sure = 12.5
+maybe = 3
+weak_with = ["modality:point-cloud", "modality:depth"]   # cameras may only feed point clouds / depth: without an abstract mention, candidate only
+
+[families.modality.values.language]
+description = "Language instructions / goals are policy input."
+patterns = ["language[- ]conditioned|language instructions?|text instructions?|natural language (commands?|instructions?|goals?)|instruction[- ]following|language goals?|free-form language|language prompts?"]
+weak = ["\\binstructions?\\b"]
+sure = 15
+maybe = 4
+
+[families.modality.values.tactile]
+description = "Tactile / force sensing is policy input."
+patterns = ["tactile"]
+weak = ["\\bGelSight\\b|\\bFSR\\b|force[- ]torque|\\bF/T sensor|contact (force|sensing|sensors?)|touch sens"]
+sure = 12.5
+maybe = 2.5
+
+[families.modality.values.depth]
+description = "Depth images / RGB-D are policy input."
+patterns = ["depth (images?|maps?|cameras?|observations?|sensors?)|\\bRGB-?D\\b"]
+sure = 20
+maybe = 2.5
+
+[families.modality.values."point-cloud"]
+description = "Point clouds (from depth cameras or LiDAR) are policy input."
+patterns = ["point[- ]clouds?"]
+weak = ["\\bLiDAR\\b"]
+sure = 10
+maybe = 2.5
+
+[families.modality.values.audio]
+description = "Audio is policy input."
+patterns = ["\\baudio\\b|microphones?|acoustic"]
+sure = 999
+maybe = 2.5
+
+[families.type]
+description = "Publication type, orthogonal to method. Decided from the title / the abstract's 'we introduce ...' sentence only."
+
+[families.type.values.survey]
+description = "Survey / review."
+title = "\\bsurvey\\b|\\breview\\b"
+strip = ["embod", "tech", "base", "modality"]     # a survey talks about everyone else's hardware and methods
+head_only = ["method"]                             # keep only methods named in the title/abstract
+
+[families.type.values.benchmark]
+description = "Benchmark / toolkit."
+title = "benchmarks?\\b"
+introduce = "benchmarks?\\b"                        # "we introduce/present/release ... benchmark" in the abstract
+strip = ["tech", "base", "modality"]               # the hardware is real, the methods are baselines
+head_only = ["method"]
+
+[families.type.values.dataset]
+description = "Dataset."
+title = "\\bdatasets?\\b|\\bdatabase\\b"
+introduce = "\\bdatasets?\\b"
+
+[families.status]
+description = "Reading progress (exactly one of the read axis), plus optional presentation and reproduction axes."
+read_axis = ["to-read-first", "to-read", "skimmed", "read"]      # never downgrade without approval
+values = ["to-read-first", "to-read", "skimmed", "read", "to-present", "presented", "to-reproduce", "reproducing", "reproduced"]
+
+# Colored tags (library setting `tagColors`, number keys in Zotero): 1 to-read-first red, 2 skimmed light blue, 3 read green, 4 to-present yellow, 5 presented brown.
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Venues — abbreviations used in the second bracket of the title. `match` are regexes tried against journal/conference
+# names, arXiv comments, PDF first pages and project pages; `name` is the full journal name (substring, case-insensitive).
+# ---------------------------------------------------------------------------------------------------------------------
+[[venues]]
+abbr = "CoRL"
+match = ["conference on robot learning|\\bcorl\\b"]
+[[venues]]
+abbr = "RSS"
+match = ["robotics: science and systems|\\brss\\b"]
+[[venues]]
+abbr = "ICRA"
+match = ["international conference on robotics and automation|\\bicra\\b"]
+[[venues]]
+abbr = "IROS"
+match = ["intelligent robots and systems|\\biros\\b"]
+[[venues]]
+abbr = "ICLR"
+match = ["international conference on learning representations|\\biclr\\b"]
+[[venues]]
+abbr = "ICML"
+match = ["international conference on machine learning|\\bicml\\b"]
+[[venues]]
+abbr = "NeurIPS"
+match = ["neural information processing systems|\\bneurips\\b|\\bnips\\b"]
+[[venues]]
+abbr = "CVPR"
+match = ["computer vision and pattern recognition|\\bcvpr\\b"]
+[[venues]]
+abbr = "ICCV"
+match = ["\\biccv\\b"]
+[[venues]]
+abbr = "ECCV"
+match = ["\\beccv\\b"]
+[[venues]]
+abbr = "AAAI"
+match = ["\\baaai\\b"]
+[[venues]]
+abbr = "SR"
+name = "science robotics"
+match = ["science robotics"]
+[[venues]]
+abbr = "IJRR"
+match = ["\\bijrr\\b|international journal of robotics research"]
+[[venues]]
+abbr = "TRO"
+match = ["\\bt-ro\\b|transactions on robotics"]
+[[venues]]
+abbr = "RAL"
+match = ["\\bra-l\\b|robotics and automation letters"]
+[[venues]]
+abbr = "CEC"
+match = ["congress on evolutionary computation|\\bcec\\b"]
+[[venues]]
+abbr = "Humanoids"
+match = ["\\bhumanoids\\b"]
+[[venues]]
+abbr = "AISTATS"
+match = ["artificial intelligence and statistics|\\baistats\\b"]
+[[venues]]
+abbr = "JMLR"
+name = "journal of machine learning research"
+match = ["\\bjmlr\\b"]
+[[venues]]
+abbr = "TPAMI"
+match = ["\\btpami\\b"]
+# Journals (full-name substring only)
+[[venues]]
+abbr = "KBS"
+name = "knowledge-based systems"
+[[venues]]
+abbr = "AES"
+name = "advances in engineering software"
+[[venues]]
+abbr = "JSC"
+name = "the journal of supercomputing"
+[[venues]]
+abbr = "AEI"
+name = "advanced engineering informatics"
+[[venues]]
+abbr = "SSCE"
+name = "systems science & control engineering"
+[[venues]]
+abbr = "ESWA"
+name = "expert systems with applications"
+[[venues]]
+abbr = "Cluster Computing"
+name = "cluster computing"
+[[venues]]
+abbr = "INS"
+name = "information sciences"
+[[venues]]
+abbr = "EAAI"
+name = "engineering applications of artificial intelligence"
+[[venues]]
+abbr = "CAIE"
+name = "computers & industrial engineering"
+[[venues]]
+abbr = "NCA"
+name = "neural computing and applications"
+[[venues]]
+abbr = "Biomimetics"
+name = "biomimetics"
+[[venues]]
+abbr = "CMAME"
+name = "computer methods in applied mechanics and engineering"
+[[venues]]
+abbr = "ASOC"
+name = "applied soft computing"
+[[venues]]
+abbr = "JOGO"
+name = "journal of global optimization"
+[[venues]]
+abbr = "SWEVO"
+name = "swarm and evolutionary computation"
+[[venues]]
+abbr = "ATE"
+name = "applied thermal engineering"
+[[venues]]
+abbr = "SOCO"
+name = "soft computing"
+[[venues]]
+abbr = "TEVC"
+name = "ieee transactions on evolutionary computation"
+[[venues]]
+abbr = "AMM"
+name = "applied mathematical modelling"
+[[venues]]
+abbr = "CACM"
+name = "communications of the acm"
+[[venues]]
+abbr = "Access"
+name = "ieee access"
+[[venues]]
+abbr = "Simulation"
+name = "simulation"
+
+[venues_misc]
+other_tokens = ["arXiv", "Book", "TechReport", "ICRA-Best"]   # accepted in the venue bracket without being in the table
+# Free text (arXiv comment, notes, project page) is only trusted as an acceptance statement if it contains one of these
+accept_context = "accept|publish|appear|proceedings|to be presented|oral|spotlight|best|award|(corl|rss|icra|iros|iclr|icml|neurips|cvpr|iccv|eccv|aaai|aistats|robotics: science and systems)\\)?\\s*20\\d\\d"

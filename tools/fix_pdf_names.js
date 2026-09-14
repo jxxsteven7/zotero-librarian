@@ -1,7 +1,8 @@
-// Zotero → 工具 → 开发者 → Run JavaScript 里跑。一次性把被标题前缀"吃"进去的 PDF 文件名改回模板格式。
-// 前提：已按 CLAUDE.md §4 设好文件名模板（该模板是库的同步设置，一台机器设好其他设备会跟着）。
-// 只动文件名里带 " - [" 的（即被 "[日期] [刊]" 前缀污染的），不碰用户手工命名的（NOA 2023.pdf 之类）。
-// 先 DRY=true 看清单，确认后改 false 再跑一次。Zotero 会把改名同步到其他设备（WebDAV 附件也跟着改）。
+// Run in Zotero: Tools > Developer > Run JavaScript. One-off repair of attachment file names that picked up the title
+// prefix ("[date] [venue] ...") through Zotero's automatic renaming.
+// Prerequisite: the file-name template from CLAUDE.md (a library-synced setting, set once on any device).
+// Only touches file names containing " - [" (i.e. polluted by the prefix); leaves hand-named files alone.
+// Run with DRY = true first to see the list, then set it to false. Zotero syncs the renames to other devices.
 var DRY = true;
 var items = await Zotero.Items.getAll(Zotero.Libraries.userLibraryID, false, true);
 var out = [];
