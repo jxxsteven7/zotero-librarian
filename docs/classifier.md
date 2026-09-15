@@ -22,12 +22,12 @@ Every key the file accepts, and the scoring behind them, is in [taxonomy.md](tax
 
 Then measure: `python3 tools/eval_classify.py` scores the classifier against the items you already tagged by hand
 (precision / recall per family, the most over- and under-assigned tags, `--errors` for every disagreement). On the
-author's library of 138 reviewed papers (2026-09-15, v0.6 classifier):
+author's library of 141 reviewed papers (2026-09-15, v1.0):
 
 | classifier | collection accuracy | tag precision | tag recall |
 |---|---|---|---|
-| rules only | 136 / 138 | 0.90 | 0.77 |
-| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 135 / 137 | 0.88 | 0.83 |
+| rules only | 139 / 141 | 0.90 | 0.78 |
+| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 139 / 141 | 0.89 | 0.83 |
 | rules + local LLM adjudicating (qwen3.5:27b) — measured on 129 papers before v0.6 | 127 / 129 | 0.88 | 0.80 |
 | rules + a perfect adjudicator (ceiling for `ZC_LLM=agent`) — same 129 | 127 / 129 | 0.91 | 0.82 |
 | qwen3.5:9b alone (no rules) | 116 / 129 | 0.64 | 0.77 |

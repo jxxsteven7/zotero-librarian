@@ -99,8 +99,8 @@ claude                      # 或 codex，然后：/download <链接>
 ## 它怎么判断
 
 `taxonomy.toml` 里的规则提取证据，过了阈值的直接写入；裁决者——Ollama、任意 OpenAI 兼容服务、或 agent 自己（`ZC_LLM`）——
-只裁决 `embod` / `tech` / `base` 里的候选，从不推翻规则或分类。在作者手工标注的 138 篇论文上：规则精确率 0.90 / 召回 0.77，
-规则 + qwen3.5:9b 0.88 / 0.83，分类 136 / 138。把 taxonomy 改成你的领域，用 `tools/eval_classify.py` 量一量。
+只裁决 `embod` / `tech` / `base` 里的候选，从不推翻规则或分类。在作者手工标注的 141 篇论文上：规则精确率 0.90 / 召回 0.78，
+规则 + qwen3.5:9b 0.89 / 0.83，分类 139 / 141。把 taxonomy 改成你的领域，用 `tools/eval_classify.py` 量一量。
 细节、全部数字和配置：[docs/classifier.md](docs/classifier.md)；文件里每个键及其驱动的打分：[docs/taxonomy.md](docs/taxonomy.md)。
 
 随仓库发布的 `taxonomy.toml` 是机器人学习——维护者自己的方向，刻意保持小而精，并在真实文献库上量过。
@@ -128,7 +128,8 @@ tests/  .github/workflows/ci.yml         合成论文上的单元测试；CI 在
 
 ## 状态 · 许可证
 
-作者每天在一个机器人学习文献库上使用，三台机器；Zotero 7 和 10。connector 端点是官方浏览器插件用的那套，不是公开文档化的 API。MIT。
+作者每天在一个机器人学习文献库上使用，三台机器（Ubuntu、macOS、Windows），Zotero 7 和 10；v1.0 之前完整的 `setup` 和
+实际命令在三个平台上都验证过。connector 端点是官方浏览器插件用的那套，不是公开文档化的 API。MIT。
 
 ## 致谢与引用
 

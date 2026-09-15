@@ -2,6 +2,8 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v1.0** (2026-09-15) — First public release. Claude Code and Codex; Ubuntu, macOS and Windows each verified end to end
+  (`setup`, the tests, the live commands against a running Zotero); the classifier re-measured on the library (README, docs/classifier.md).
 - **v0.15** (2026-09-15) — Windows test run. `install` wrote the `zl.cmd` launcher with doubled carriage returns (CR CR LF: the
   file was opened with CRLF newline translation on top of an explicit CRLF); cmd.exe tolerated it, the file is now plain CRLF. Verified on
   Windows 11 / Python 3.12: `setup`, the tests, `dump` / `fetch` / `discover` / `refs` / `recheck` against a running Zotero, `install` /

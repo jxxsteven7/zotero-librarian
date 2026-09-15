@@ -105,8 +105,8 @@ user-level skills for both agents; `--remove` undoes it). Ubuntu, macOS and Wind
 
 Rules from `taxonomy.toml` extract evidence and assign what clears the thresholds; an adjudicator — Ollama, an
 OpenAI-compatible server, or the agent itself (`ZC_LLM`) — settles the candidates in `embod` / `tech` / `base`; it never
-overrides a rule or the collection. On the author's 138 hand-tagged papers: rules 0.90 precision / 0.77 recall,
-rules + qwen3.5:9b 0.88 / 0.83, 136 / 138 collections. Edit the taxonomy for your field, measure with
+overrides a rule or the collection. On the author's 141 hand-tagged papers: rules 0.90 precision / 0.78 recall,
+rules + qwen3.5:9b 0.89 / 0.83, 139 / 141 collections. Edit the taxonomy for your field, measure with
 `tools/eval_classify.py`. Details, all numbers and the config: [docs/classifier.md](docs/classifier.md); every key of the
 file, with the scoring it drives: [docs/taxonomy.md](docs/taxonomy.md).
 
@@ -136,7 +136,8 @@ commands you run before pushing (neither needs a Zotero library) — and `tools/
 
 ## Status · License
 
-Used daily by its author on one robot-learning library from three machines; Zotero 7 and 10. The connector endpoints
+Used daily by its author on one robot-learning library from three machines (Ubuntu, macOS, Windows), Zotero 7 and 10;
+the full `setup` and the live commands were verified on all three before v1.0. The connector endpoints
 are the ones the official browser connector uses, not a documented API. MIT.
 
 ## Credits and references
