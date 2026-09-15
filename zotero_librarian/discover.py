@@ -74,7 +74,7 @@ def hf_daily(days):
 
 
 def run(days=7, cats=("cs.RO",), query=None, tags=(), require_all=False, sources=("arxiv", "hf"), max_results=400):
-    lib = localdb.load()
+    lib = localdb.load(refresh=True)                                      # the live library, so what was just added is skipped
     known = {norm_title(r["title"]) for r in lib}
     known_ids = set()
     for r in lib:

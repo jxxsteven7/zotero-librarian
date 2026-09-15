@@ -75,7 +75,7 @@ def _match(p, idx):
 
 
 def one(ident, top=15):
-    lib = localdb.load(); idx = _index(lib)
+    lib = localdb.load(refresh=True); idx = _index(lib)
     sid, label = resolve(ident, lib)
     if not sid: raise RuntimeError(f"{label!r} has no arXiv id / DOI to look up")
     me = _get(f"/paper/{urllib.parse.quote(sid)}", f"?fields={FIELDS}")

@@ -21,7 +21,7 @@ logs/                 audit log written by the scripts (local, not in git)
 
 | Task | Command |
 |---|---|
-| add papers (`download` skill) | `zl.py add <links...>` — pauses only when the collection is uncertain or, with `ZC_LLM=agent`, for an ADJUDICATE block |
+| add papers (`download` skill) | `zl.py add <links...>` / `--from-file FILE` — pauses only when the collection is uncertain or, with `ZC_LLM=agent`, for an ADJUDICATE block |
 | organize items added by hand (`tidy` skill) | `zl.py tidy [--dry-run] [--limit N] [--create-collections]` — every item without a status tag |
 | edit one item | `zl.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why ...` · `collect <key> <collection>` · `set <key> url=...` |
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |

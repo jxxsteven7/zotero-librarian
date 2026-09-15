@@ -7,6 +7,7 @@ USAGE = """python3 zl.py <command> ...        Zotero library maintenance (rules:
 
 Adding papers (the download skill)
   add <link|PDF path>...   fetch -> classify (rules + local LLM) -> save via Zotero desktop -> verify on the server -> log -> report
+        [--from-file FILE]   (one link / arXiv id / DOI per line; # comments) — a reading list or a bibliography in one go
         [--collection X] [--also Y] [--tags a,b] [--drop a,b] [--first] [--force] [--venue X] [--date YYYY-MM-DD]
         [--url URL] [--short NAME] [--name TITLE] [--wait SECONDS (150)] [--dry-run] [--confirm a,b|none]
   fetch <link>...          stage only (metadata + PDF + full text + duplicate check + proposed title) in inbox/, full card, no write
@@ -75,8 +76,13 @@ def main(argv=None):
 
     if cmd == "add":
         from . import pipeline
-        ap = argparse.ArgumentParser(prog="zl.py add"); ap.add_argument("links", nargs="+"); _add_save_opts(ap); ap.add_argument("--dry-run", action="store_true")
-        a = ap.parse_args(args); pipeline.add(a.links, dry_run=a.dry_run, **_kw(a))
+        ap = argparse.ArgumentParser(prog="zl.py add"); ap.add_argument("links", nargs="*"); _add_save_opts(ap); ap.add_argument("--dry-run", action="store_true")
+        ap.add_argument("--from-file", metavar="FILE", help="one link / arXiv id / DOI per line; blank lines and # comments skipped")
+        a = ap.parse_args(args); links = list(a.links)
+        if a.from_file:
+            with open(a.from_file, encoding="utf-8") as f: links += [l.split("#")[0].strip() for l in f if l.split("#")[0].strip()]
+        if not links: ap.error("give links, or --from-file FILE")
+        pipeline.add(links, dry_run=a.dry_run, **_kw(a))
     elif cmd == "fetch":
         from . import fetch
         for link in args:

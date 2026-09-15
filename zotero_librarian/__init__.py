@@ -2,4 +2,4 @@
 (python3 zl.py --help). Rules: AGENTS.md, taxonomy: taxonomy.toml. Version rule: one feature = one commit `vX.Y: ...` that
 bumps __version__ and CHANGELOG.md; the maintainer tags major versions."""
 NAME = "zotero-librarian"
-__version__ = "0.8"
+__version__ = "0.9"

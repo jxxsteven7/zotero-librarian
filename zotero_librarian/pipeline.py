@@ -126,25 +126,26 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, dry_run=False,
         venue=None, date_=None, name=None, url=None, short=None, confirm=None):
     if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zl.py save <slug> --confirm ...`)")
-    rows = []
+    rows = []; n = dict(saved=0, paused=0, duplicate=0, failed=0)
     for link in links:
         try: m = fetch.fetch_one(link)
         except Exception as e:
-            print(f"=== {link}\n  x {e}\n"); rows.append(["—", link, "—", "—", "—", f"x {str(e)[:120]}"]); continue
+            print(f"=== {link}\n  x {e}\n"); rows.append(["—", link, "—", "—", "—", f"x {str(e)[:120]}"]); n["failed"] += 1; continue
         brief(m); sg = suggest_for(m, confirm=confirm); judgement(sg)
         if m.get("duplicate") and not force:
             d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
-            rows.append([f"`{d['key']}`", d["title"], "—", "—", "—", "duplicate, already in the library, skipped"]); continue
+            rows.append([f"`{d['key']}`", d["title"], "—", "—", "—", "duplicate, already in the library, skipped"]); n["duplicate"] += 1; continue
         coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
         if dry_run:
             print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
             why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
-            rows.append(["PAUSE", m["proposed_title"], coll + ("?" if need_coll else ""), ", ".join(tags_), "yes" if m.get("pdf_src") else "no", why]); continue
+            rows.append(["PAUSE", m["proposed_title"], coll + ("?" if need_coll else ""), ", ".join(tags_), "yes" if m.get("pdf_src") else "no", why]); n["paused"] += 1; continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
-        rows.append(row)
+        rows.append(row); n["saved"] += 1
     print("\n" + table.render(COLS, rows))
+    if len(links) > 1: print(f"\n{len(links)} links: " + ", ".join(f"{v} {k}" for k, v in n.items() if v) + (" — the PAUSE rows each print the command that finishes them" if n["paused"] else ""))
     return rows
 
 

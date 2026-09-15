@@ -2,6 +2,8 @@
 
 One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
 
+- **v0.9** (2026-09-15) — `zl.py add --from-file FILE` (one link / arXiv id / DOI per line) and a summary line for a batch
+  (saved / paused / duplicate / failed); `discover` and `refs` read the live library instead of the last dump.
 - **v0.8** (2026-09-15) — one table for two readers (`table.py`): markdown when piped to an agent, aligned columns cut to
   the terminal for a human; used by `add` / `tidy` / `discover` / `refs`. Three README demos recorded by `docs/demo.sh`.
 - **v0.7** (2026-09-15) — readable terminal output: the card prints before the model runs, evidence snippets fit the

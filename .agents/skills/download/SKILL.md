@@ -9,7 +9,8 @@ The judgement is done by the scripts (`taxonomy.toml` rules + the local model, o
 command, relay its report, and handle only what it marks. Never read the PDF or grep the full text yourself.
 
 Arguments: one or more links or local PDF paths, space-separated (arXiv / DOI / OpenReview / PDF / project page / a
-paper page with citation meta such as JMLR). Ask which papers if none were given. On Windows use `python` instead of `python3`.
+paper page with citation meta such as JMLR). A file with one link per line (a reading list, a bibliography): `--from-file FILE`
+instead of the links. Ask which papers if none were given. On Windows use `python` instead of `python3`.
 
 ## Steps
 
