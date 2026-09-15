@@ -2,6 +2,9 @@
 
 One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
 
+- **v0.7** (2026-09-15) — readable terminal output: the card prints before the model runs, evidence snippets fit the
+  terminal width and keep the matched words, `saved` / `sync` are one line each (details only when the server differs),
+  the model's disagreements are one flag, table notes name candidates only. README demo GIF (`docs/demo.sh` records it).
 - **v0.6** (2026-09-15) — keep an appendix that follows the reference list (NeurIPS / CoRL layout; the robot setup lives
   there), discount negated modalities in the abstract ("without depth or point-cloud inputs"), RM-75 / 7-DoF manipulator
   patterns. Eval on 132 items: 306/37/97 -> 313/39/90 TP/FP/FN, recall 0.76 -> 0.78, precision 0.89.

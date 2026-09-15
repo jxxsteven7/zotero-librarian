@@ -9,7 +9,7 @@ from . import fetch, localdb, zapi
 from .config import INBOX
 from .http import http, UA_LOCAL
 from .titles import make_title, short_title
-from .taxonomy import COLLECTIONS, DEFAULT_STATUS, check_tags
+from .taxonomy import COLLECTIONS, DEFAULT_STATUS, check_tags, sort_tags
 
 CONNECTOR = "http://127.0.0.1:23119"
 
@@ -57,7 +57,8 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     got = localdb.item_by_title(title)
     if not got: raise RuntimeError("connector returned 201 but the title is not in the local database — check Zotero")
     missing = [f for f in got["files"] if not os.path.exists(f)]
-    print(f"saved {got['key']} | {title}\n  collections: {got['collections']}\n  tags: {sorted(got['tags'])}\n  PDF : {got['files'] or 'none'}" + (f"  ! missing files {missing}" if missing else ""))
+    print(f"  saved     : {got['key']} <- Zotero desktop | {' + '.join(got['collections'])} | {', '.join(sort_tags(got['tags']))}")
+    print(f"  PDF       : {', '.join(os.path.basename(f) for f in got['files']) if got['files'] else 'none'}" + (f"  ! missing files {missing}" if missing else ""))
     extra = ""
     if also:
         try: extra = " | +collection(web api): " + also + " " + zapi.add_collection(got["key"], also)

@@ -15,20 +15,11 @@
 Give it a link. It fetches metadata and PDF, checks for duplicates, finds the venue and the project page, files the
 paper into the right collection, tags it from a controlled vocabulary **with the sentence that justifies each tag**,
 saves through your running Zotero, verifies the cloud sync, logs — and prints one table. A local model (or, without a
-GPU, the agent) settles only the borderline tags. You read the paper yourself. (Output abridged:)
+GPU, the agent) settles only the borderline tags. You read the paper yourself.
 
-```
-$ python3 zl.py add https://arxiv.org/abs/2607.11481
-  title     : [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation   short: TeleDexter
-  URL       : https://bigai-dex.github.io/blog/teledexter/                 PDF: ok
-  collection: Dex-Manipulation
-  assign    : method:teleop, method:rl, embod:dex-hand, embod:single-arm
-      method:teleop     <- title: ...Towards Human-level Dexterous Teleoperation...
-      embod:single-arm  <- body x2: ...All real-world experiments are conducted on a Franka FR3 arm equipped with...
-  candidates: modality:vision (6 body hits, not in the abstract)
-  sync      : ok server v3540 | collections ['Dex-Manipulation'] | tags [...]
-| `U3HFYV4Q` | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation | Dex-Manipulation | method:teleop, method:rl, embod:dex-hand, embod:single-arm, status:to-read | yes | sync ok |
-```
+![zl.py add on a fresh arXiv paper: card, evidence-backed tags, save, sync check, one table](docs/demo.gif)
+
+<!-- zotero-screenshot: the organized library (collections, [date] [venue] titles, tag pane) goes here -->
 
 ## Why
 

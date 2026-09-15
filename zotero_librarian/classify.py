@@ -11,7 +11,7 @@ baselines mention everything once or twice). The reference list is cut first, ot
 Thresholds were tuned on the library's own reviewed items (tools/eval_classify.py); re-run it after editing the rules.
 The LLM classifier (llm.py) consumes the evidence this module extracts, so keep the patterns broad and the thresholds strict.
 """
-import re
+import re, shutil
 
 from . import taxonomy as tx
 
@@ -252,15 +252,24 @@ def evidence_pack(sg, S_all=None, limit=2, width=160):
     return out
 
 
-def fmt(sg, width=150):
+def _cut(s, n):
+    """Trim a snippet to n characters keeping its middle (snip() centres the match), at word boundaries."""
+    if len(s) <= n: return s
+    a = (len(s) - n) // 2; s = s[a:a + n]
+    return s.split(" ", 1)[-1].rsplit(" ", 1)[0] if s.count(" ") >= 2 else s
+
+
+def fmt(sg, width=None):
+    """Evidence snippets are cut to the terminal width (a human reading the terminal); 150 characters when piped (an agent)."""
+    if width is None: width = max(60, shutil.get_terminal_size((196, 40)).columns - 46)
     out = [f"  collection: {sg['collection']}" + (f" + {sg['also']}" if sg["also"] else "")]
     out.append("  assign    : " + (", ".join(sg["sure"]) or "(status only)"))
     for t in sg["sure"]:
-        for where, s in sg["evidence"].get(t, []): out.append(f"      {t:<24} <- {where}: ...{s[:width]}...")
+        for where, s in sg["evidence"].get(t, []): out.append(f"      {t:<24} <- {where}: ...{_cut(s, width)}...")
     if sg["maybe"]:
         out.append("  candidates: (not assigned — discuss with the user)")
         for t, why in sg["maybe"].items():
             ev = sg["evidence"].get(t) or []
-            out.append(f"      {t:<24} {why}" + (f"  <- {ev[0][0]}: ...{ev[0][1][:90]}..." if ev else ""))
+            out.append(f"      {t:<24} {why}" + (f"  <- {ev[0][0]}: ...{_cut(ev[0][1], max(40, width - len(why) - 12))}..." if ev else ""))
     for f in sg["flags"]: out.append(f"  ! {f}")
     return "\n".join(out)

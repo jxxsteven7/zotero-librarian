@@ -128,15 +128,18 @@ def merge(c, llm, policy="adjudicate", collection=None):
         elif t not in maybe:
             s = S.get(t, {"head": 0, "body": 0})
             maybe[t] = f"model suggested it, but the text barely supports it ({s['head']} abstract / {s['body']:g} body hits)"
+    kept = []
     for t in rule_sure - picked:
         note = "model did not pick it" + (": " + unsure[t] if unsure.get(t) else "")
         if policy == "veto": fam_tags[t.split(":")[0]].remove(t); maybe[t] = "strong textual evidence, but the " + note
-        else: flags.append(f"{t}: kept on textual evidence although the {note}")
+        else: kept.append(t + (f" ({unsure[t]})" if unsure.get(t) else ""))
     for t, why in unsure.items():
         if t in valid and t not in {x for ts in fam_tags.values() for x in ts} and t not in maybe: maybe[t] = "model unsure: " + why
     c2 = dict(c, fam_tags=fam_tags, maybe=maybe, flags=flags, rule_sure=rule_sure, lock_collection=collection)
     classify.apply_relations(c2["fam_tags"], c2["maybe"], S, c2["title"], c2["head_txt"], c2["body"])
     sg = classify.finish(c2)
+    kept = [k for k in kept if k.split(" ")[0] in sg["sure"]]                                      # finish() may have stripped some (benchmark / survey rules)
+    if kept: sg["flags"].append("kept on textual evidence, not picked by the model: " + ", ".join(sorted(kept)))   # one line, not one per tag
     if llm.get("collection") in tx.COLLECTIONS and llm["collection"] != sg["collection"]:
         sg["flags"].append(f"model would file it under {llm['collection']} (confidence {llm.get('confidence')}): {llm.get('reason', '')}")
     if bad: sg["flags"].append("model proposed values outside the taxonomy (ignored): " + ", ".join(bad))

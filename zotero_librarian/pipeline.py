@@ -7,7 +7,7 @@ tidy   organize items that were dropped into Zotero by hand (no status tag yet):
 verify one item: server state + local sync state.
 Things a human must decide are marked "PAUSE" (collection boundary) and the item is skipped, with the exact command to
 finish it. With ZC_LLM=agent the same pause carries the ADJUDICATE block; the agent finishes with `--confirm`."""
-import os, re
+import os, re, sys
 from datetime import date
 
 from . import classify, connector, fetch, llm, localdb, taxonomy as tx, zapi
@@ -29,8 +29,9 @@ def suggest_for(m, text=None, confirm=None):
     return llm.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]) if text is None else text, has_pdf=bool(m.get("pdf_src")) if text is None else bool(text), confirm=confirm)
 
 
-def brief(m, sg):
-    """Shorter than the fetch card: no full abstract (the script already judged it), just what a reviewer needs."""
+def brief(m, sg=None):
+    """Shorter than the fetch card: no full abstract, just what a reviewer needs. `add` prints it before the classification
+    runs (the card is ready while the model still thinks) and judgement() after."""
     a = ", ".join((x["firstName"] + " " + x["lastName"]).strip() for x in m["authors"][:3]) + (" ..." if len(m["authors"]) > 3 else "")
     print(f"=== {m['slug']}  ({m['source']}: {m['id']})")
     print(f"  title     : {m['proposed_title']}   short: {m.get('short_title')}")
@@ -39,9 +40,14 @@ def brief(m, sg):
     print(f"  URL       : {m.get('project_url') or (m.get('url') or '-') + ' (no project page found)'}")
     print(f"  PDF       : {'ok <- ' + m['pdf_src'] if m.get('pdf_src') else 'not obtained ' + '; '.join(m.get('pdf_tried', []))[:200]}")
     if m.get("duplicate"): print(f"  ! duplicate: already in the library as {m['duplicate']['key']} | {m['duplicate']['title']}")
-    print(f"  abstract  : {m.get('abstract', '')[:300]}...")
+    print(f"  abstract  : {m.get('abstract', '')[:300]}...", flush=True)
+    if sg is not None: judgement(sg)
+
+
+def judgement(sg):
     print(classify.fmt(sg)); l = llm.fmt_llm(sg)
     if l: print(l)
+    sys.stdout.flush()
 
 
 def decide(sg, collection=None, tags=None, drop=None, also=None, first=False):
@@ -67,8 +73,9 @@ def pause_cmd(head, sg, coll, also, need_coll, need_adj):
     return "; ".join(why)
 
 
-def verify(key, wait=150, quiet=False):
-    """Server (Web API) + local (sqlite) state of one item; waits up to `wait` seconds for the client to sync a new item."""
+def verify(key, wait=150, quiet=False, expect=None):
+    """Server (Web API) + local (sqlite) state of one item; waits up to `wait` seconds for the client to sync a new item.
+    `expect` (what was just written: collection / tags / url / short) turns the report into one line when the server agrees."""
     env = zapi.env_or_die()
     it = zapi.wait_remote(env, key, wait=wait, step=10)                      # wait=0: a single check
     if not it:
@@ -79,7 +86,19 @@ def verify(key, wait=150, quiet=False):
     synced, ver = localdb.sync_state(key)
     info = dict(version=it["version"], title=d["title"], tags=sorted(t["tag"] for t in d["tags"]), collections=[names.get(c, c) for c in d["collections"]],
                 url=d.get("url", ""), short=d.get("shortTitle", ""), children=kids, local_synced=synced, local_version=ver)
-    if not quiet:
+    if quiet: return info
+    diff = []
+    if expect:
+        if expect["collection"] not in info["collections"]: diff.append(f"collection {info['collections']} (wrote {expect['collection']})")
+        missing = sorted(set(expect["tags"]) - set(info["tags"]))
+        if missing: diff.append("tags missing " + ", ".join(missing))
+        if expect.get("url") and info["url"] != expect["url"]: diff.append(f"URL {info['url']!r}")
+        if expect.get("short") and info["short"] != expect["short"]: diff.append(f"short title {info['short']!r}")
+    if expect and not diff:
+        print(f"  sync      : ok — on the server (v{info['version']}) with the same collection, tags, URL and short title; "
+              f"{len(kids)} attachment{'s' if len(kids) != 1 else ''}" + ("" if synced else "; local changes not uploaded yet"))
+    elif expect: print("  sync      : ! server differs: " + "; ".join(diff))
+    else:
         print(f"  sync      : ok server v{info['version']} | collections {info['collections']} | tags {info['tags']}")
         print(f"              URL {info['url']} | short {info['short']} | children {[k[0] for k in kids]} | local synced={synced}")
     return info
@@ -87,7 +106,7 @@ def verify(key, wait=150, quiet=False):
 
 def report_row(got, sg, info, note_extra=""):
     notes = []
-    if sg["maybe"]: notes.append("candidates: " + "; ".join(f"`{t}` ({w})" for t, w in sg["maybe"].items()))
+    if sg["maybe"]: notes.append("candidates: " + ", ".join(sg["maybe"]))                # reasons are in the judgement above
     notes += [f for f in sg["flags"] if "status tag only" not in f]
     if "!" in (got.get("date_src") or "") or "!" in (got.get("venue_src") or ""): notes.append(f"date/venue flagged: {got.get('date_src')} / {got.get('venue_src')}")
     if note_extra: notes.append(note_extra)
@@ -100,7 +119,7 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
     """Save + verify + report row. Shared by add and save (the connector already appended the audit log)."""
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
     got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
-    info = verify(got["key"], wait=wait) if wait else None
+    info = verify(got["key"], wait=wait, expect=dict(collection=coll, tags=tags, url=got["url"], short=got["short"])) if wait else None
     return got, report_row(got, sg, info)                                  # printed once, in the caller's table
 
 
@@ -112,8 +131,7 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
         try: m = fetch.fetch_one(link)
         except Exception as e:
             print(f"=== {link}\n  x {e}\n"); rows.append(f"| — | {link} | — | — | — | x {str(e)[:120]} |"); continue
-        sg = suggest_for(m, confirm=confirm)
-        brief(m, sg)
+        brief(m); sg = suggest_for(m, confirm=confirm); judgement(sg)
         if m.get("duplicate") and not force:
             d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
             rows.append(f"| `{d['key']}` | {d['title']} | — | — | — | duplicate, already in the library, skipped |"); continue

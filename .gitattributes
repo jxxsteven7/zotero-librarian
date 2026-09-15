@@ -7,3 +7,5 @@
 *.toml text eol=lf
 *.pdf binary
 *.json text eol=lf
+*.gif binary
+*.cast text eol=lf
