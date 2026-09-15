@@ -9,6 +9,7 @@
 [![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org)
 [![Python](https://img.shields.io/badge/Python-3.11%2B_stdlib_only-3776AB?style=flat-square&logo=python&logoColor=white)](#install)
 [![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#install)
+[![CI](https://img.shields.io/github/actions/workflow/status/jxxsteven7/zotero-librarian/ci.yml?style=flat-square&label=ci)](https://github.com/jxxsteven7/zotero-librarian/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 Give it a link. It fetches metadata and PDF, checks for duplicates, finds the venue and the project page, files the
@@ -96,6 +97,7 @@ zl.py  taxonomy.toml  AGENTS.md          entry point · your collections, tags, 
 zotero_librarian/                        fetch / classify / llm / pipeline / connector / zapi / ... (stdlib only)
 .agents/skills/  .claude/skills/         download · tidy · discover · refs  (source · verbatim copy)
 docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md · eval_classify.py, fix_pdf_names.js · one line per version
+tests/  .github/workflows/ci.yml         unit tests on synthetic papers; CI runs them + `zl.py setup --offline` on Ubuntu, macOS, Windows
 .env  cache/  inbox/  logs/              per machine, git-ignored
 ```
 
@@ -104,7 +106,9 @@ docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md 
 Issues and PRs welcome — taxonomies for other fields most of all. The procedure, step by step, is in
 [CONTRIBUTING.md](CONTRIBUTING.md); commit descriptions and reviews follow Google's
 [CL descriptions](https://google.github.io/eng-practices/review/developer/cl-descriptions.html) and
-[standard of code review](https://google.github.io/eng-practices/review/reviewer/standard.html).
+[standard of code review](https://google.github.io/eng-practices/review/reviewer/standard.html). CI runs
+`python3 zl.py setup --offline` and `python3 -m unittest discover -s tests` on the three platforms for every PR — the same two
+commands you run before pushing (neither needs a Zotero library).
 
 ## Status · License
 

@@ -37,7 +37,8 @@ Library and batch
   dump [--table]           read-only snapshot -> cache/library_dump.json
   proposal                 render proposals/proposal.py -> proposals/proposal.md
   apply --dry-run|--plan|--apply [--only K1,K2] [--no-rename] [--no-status]   batch write (approval mode)
-  setup [--sync-skills]    health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills / agents)
+  setup [--sync-skills] [--offline]   health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills /
+                           agents); --offline = repository checks only (what CI runs; no Zotero, no network)
   install [--remove]       use it from anywhere: launcher `zl` on PATH + user-level skills for Claude Code / Codex / Kimi
   --version                print the version (CHANGELOG.md lists the changes)
 

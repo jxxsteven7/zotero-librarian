@@ -1,11 +1,15 @@
 """New-machine health check (Ubuntu / macOS / Windows, standard library only, changes nothing):
 
-    python zl.py setup [--sync-skills]      # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
+    python zl.py setup [--sync-skills] [--offline]      # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
 
-Checks, one by one: Python version, .env, Zotero data directory (auto-detected from prefs.js), pdftotext / pypdf,
+Checks, one by one: Python version, .env, Zotero data directory (auto-detected from prefs.js), taxonomy.toml, pdftotext / pypdf,
 HTTPS, the Zotero desktop connector (port 23119), the Web API key (never printed), the classifier's adjudicator
-(local LLM / agent / off), and that .claude/skills mirrors .agents/skills (--sync-skills copies). Every missing piece
-comes with the install / configuration command for this platform. Exit code 1 = something is missing.
+(local LLM / agent / off), that .claude/skills mirrors .agents/skills (--sync-skills copies) and that every skill carries
+the frontmatter the agents require. Every missing piece comes with the install / configuration command for this platform.
+Exit code 1 = something is missing (a stale skill copy or bad frontmatter counts: the repository must stay consistent).
+
+--offline keeps only the checks that need nothing but the repository (Python, taxonomy, pdftotext as a warning, skills):
+CI runs it on Ubuntu / macOS / Windows for every pull request, and a contributor without a Zotero library runs it locally.
 """
 import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 
@@ -52,6 +56,7 @@ def https(url, ua=UA_LOCAL, timeout=10):
 
 
 def run(argv=()):
+    offline = "--offline" in argv
     problems = []
     def report(ok, msg, fix=None, warn=False):
         print(f"{OK if ok else (WARN if warn else BAD)} {msg}" + (f"\n     -> {fix}" if fix and not ok else ""))
@@ -64,33 +69,11 @@ def run(argv=()):
     if config.IS_WIN:
         print("     Windows: where the docs say `python3 zl.py ...`, use `python zl.py ...` (or `py zl.py ...`)")
 
-    # 2. .env
     env = config.load_env()
-    if os.path.exists(config.ENV_PATH):
-        mode = stat.S_IMODE(os.stat(config.ENV_PATH).st_mode)
-        perm_ok = config.IS_WIN or mode == 0o600
-        report(True, ".env present" + ("" if config.IS_WIN else f" (mode {mode:o}, should be 600)"))
-        if not perm_ok: report(False, ".env is not mode 600", f"chmod 600 {config.ENV_PATH}", warn=True)
-        report(bool(env.get("ZOTERO_API_KEY")), "ZOTERO_API_KEY set",
-               "create one at https://www.zotero.org/settings/keys (personal library read/write + file access) and put ZOTERO_API_KEY=... in .env")
-        report(bool(env.get("ZOTERO_LIBRARY_ID")), "ZOTERO_LIBRARY_ID set", "your user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env")
+    if offline:
+        print(f"{WARN} skipped (--offline): .env, Zotero data directory, HTTPS, desktop connector, Web API key, adjudicator")
     else:
-        report(False, ".env missing", "cp .env.example .env (then chmod 600 .env on Linux/macOS) and fill ZOTERO_API_KEY / ZOTERO_LIBRARY_ID; the data directory is auto-detected")
-
-    # 3. Zotero data directory
-    src = "from .env" if env.get("ZOTERO_DATA_DIR") else ("auto-detected from Zotero's prefs.js" if config.data_dir_from_prefs() else "platform default")
-    if os.path.isfile(config.DB):
-        report(True, f"Zotero database {config.DB} ({src})")
-        try:
-            con = config.connect_ro()
-            n = con.execute("select count(*) from items where itemID not in (select itemID from deletedItems)").fetchone()[0]
-            report(True, f"read-only open works ({n} items; fine while Zotero is running)")
-        except Exception as e:
-            report(False, f"sqlite read-only open failed: {e}", "make sure the path points at zotero.sqlite; on Windows write e.g. ZOTERO_DATA_DIR=C:\\Users\\you\\Zotero")
-    else:
-        hint = {"win32": r"Windows default C:\Users\<you>\Zotero", "darwin": "macOS default ~/Zotero"}.get(sys.platform, "Linux default ~/Zotero")
-        report(False, f"{config.DB} not found ({src})",
-               f"Zotero > Settings > Advanced > Files and Folders shows the data directory ({hint}); put ZOTERO_DATA_DIR=<dir> in .env. prefs.js candidates: {config.zotero_profile_prefs() or 'no Zotero profile found'}")
+        machine_checks(env, report)
 
     # 4. taxonomy
     try:
@@ -107,8 +90,58 @@ def run(argv=()):
             import pypdf; report(True, f"pdftotext not found; using pypdf {pypdf.__version__} (works, slightly worse text)", warn=True)
         except ImportError:
             report(False, "no pdftotext and no pypdf: no full text, so no venue statements, project links or tag evidence",
-                   config.PDFTOTEXT_INSTALL + "; if installed outside PATH, set PDFTOTEXT=<path> in .env")
+                   config.PDFTOTEXT_INSTALL + "; if installed outside PATH, set PDFTOTEXT=<path> in .env", warn=offline)
 
+    if not offline: service_checks(env, report)
+
+    # 10. skills: Claude Code reads .claude/skills, everything else .agents/skills — the copies must match
+    if "--sync-skills" in argv: sync_skills()
+    stale = stale_skills(); bad = skill_problems()
+    report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zl.py setup --sync-skills")
+    report(not bad, "skills: frontmatter valid for every agent" if not bad else "skills: " + "; ".join(bad), "add `name: <dir>` and `description:` between --- lines at the top of SKILL.md")
+
+    # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
+    found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
+    if found: report(True, "agents on PATH: " + "; ".join(f"{n} -> {s}" for n, s in found))
+    else: report(True, "no agent CLI on PATH (claude / codex / kimi) — install one, or point any agent that reads AGENTS.md at this directory", warn=True)
+
+    print()
+    if problems:
+        print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zl.py setup` again"); sys.exit(1)
+    if offline: print("Repository checks pass (--offline: nothing about this machine's Zotero was checked)")
+    else: print("All good: open your agent in this directory and use the download skill" + (f", e.g. {found[0][1]}" if found else ""))
+
+
+def machine_checks(env, report):
+    """2-3: credentials and the Zotero data directory (skipped with --offline)."""
+    if os.path.exists(config.ENV_PATH):
+        mode = stat.S_IMODE(os.stat(config.ENV_PATH).st_mode)
+        perm_ok = config.IS_WIN or mode == 0o600
+        report(True, ".env present" + ("" if config.IS_WIN else f" (mode {mode:o}, should be 600)"))
+        if not perm_ok: report(False, ".env is not mode 600", f"chmod 600 {config.ENV_PATH}", warn=True)
+        report(bool(env.get("ZOTERO_API_KEY")), "ZOTERO_API_KEY set",
+               "create one at https://www.zotero.org/settings/keys (personal library read/write + file access) and put ZOTERO_API_KEY=... in .env")
+        report(bool(env.get("ZOTERO_LIBRARY_ID")), "ZOTERO_LIBRARY_ID set", "your user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env")
+    else:
+        report(False, ".env missing", "cp .env.example .env (then chmod 600 .env on Linux/macOS) and fill ZOTERO_API_KEY / ZOTERO_LIBRARY_ID; the data directory is auto-detected")
+
+    src = "from .env" if env.get("ZOTERO_DATA_DIR") else ("auto-detected from Zotero's prefs.js" if config.data_dir_from_prefs() else "platform default")
+    if os.path.isfile(config.DB):
+        report(True, f"Zotero database {config.DB} ({src})")
+        try:
+            con = config.connect_ro()
+            n = con.execute("select count(*) from items where itemID not in (select itemID from deletedItems)").fetchone()[0]
+            report(True, f"read-only open works ({n} items; fine while Zotero is running)")
+        except Exception as e:
+            report(False, f"sqlite read-only open failed: {e}", "make sure the path points at zotero.sqlite; on Windows write e.g. ZOTERO_DATA_DIR=C:\\Users\\you\\Zotero")
+    else:
+        hint = {"win32": r"Windows default C:\Users\<you>\Zotero", "darwin": "macOS default ~/Zotero"}.get(sys.platform, "Linux default ~/Zotero")
+        report(False, f"{config.DB} not found ({src})",
+               f"Zotero > Settings > Advanced > Files and Folders shows the data directory ({hint}); put ZOTERO_DATA_DIR=<dir> in .env. prefs.js candidates: {config.zotero_profile_prefs() or 'no Zotero profile found'}")
+
+
+def service_checks(env, report):
+    """6-9: network, the Zotero desktop connector, the Web API key and the adjudicator (skipped with --offline)."""
     # 6. HTTPS (python.org macOS installers ship without certificates; proxies show up here too)
     try:
         try: https("https://export.arxiv.org/api/query?search_query=id:2410.24164&max_results=1"); report(True, "HTTPS works (arXiv API)")
@@ -153,19 +186,3 @@ def run(argv=()):
     if cfg["kind"] == "off": report(True, "adjudicator: none (ZC_LLM=off) — rules only, borderline tags are listed as candidates", warn=True)
     elif cfg["kind"] == "agent": report(True, "adjudicator: the coding agent (ZC_LLM=agent) — no local model, costs a few hundred tokens per paper", warn=True)
     else: report(ok, f"adjudicator: local model — {msg}", "install Ollama (https://ollama.com) and `ollama pull " + cfg["model"] + "`; or ZC_LLM=agent (the agent decides, costs tokens) / ZC_LLM=off in .env", warn=True)
-
-    # 10. skills: Claude Code reads .claude/skills, everything else .agents/skills — the copies must match
-    if "--sync-skills" in argv: sync_skills()
-    stale = stale_skills(); bad = skill_problems()
-    report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zl.py setup --sync-skills", warn=True)
-    report(not bad, "skills: frontmatter valid for every agent" if not bad else "skills: " + "; ".join(bad), "add `name: <dir>` and `description:` between --- lines at the top of SKILL.md", warn=True)
-
-    # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
-    found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
-    if found: report(True, "agents on PATH: " + "; ".join(f"{n} -> {s}" for n, s in found))
-    else: report(True, "no agent CLI on PATH (claude / codex / kimi) — install one, or point any agent that reads AGENTS.md at this directory", warn=True)
-
-    print()
-    if problems:
-        print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zl.py setup` again"); sys.exit(1)
-    print("All good: open your agent in this directory and use the download skill" + (f", e.g. {found[0][1]}" if found else ""))

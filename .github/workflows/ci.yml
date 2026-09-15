@@ -1,0 +1,24 @@
+# Every push and pull request: the repository checks on the three platforms the tool supports.
+# Nothing here touches a Zotero library or the network: `setup --offline` + the unit tests (synthetic papers).
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m compileall -q zl.py zotero_librarian tools tests
+      - run: python zl.py --version
+      - run: python zl.py setup --offline
+      - run: python -m unittest discover -s tests -v
+      - name: the checks must not modify the repository
+        run: git status --porcelain && test -z "$(git status --porcelain)"
+        shell: bash

@@ -2,6 +2,10 @@
 
 One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
 
+- **v0.4** (2026-09-15) — CI on Ubuntu / macOS / Windows (`.github/workflows/ci.yml`): `zl.py setup --offline` (repository
+  checks only: Python, taxonomy, skills mirror and frontmatter — no Zotero, no network) + `tests/` (rule engine, agent
+  adjudication round trip, titles, skills, CLI on synthetic papers, standard-library unittest). A stale `.claude/skills` copy or
+  bad skill frontmatter now fails `setup` instead of warning.
 - **v0.3** (2026-09-15) — first run on an existing library: `zl.py tidy --create-collections` creates the taxonomy's
   collections, `--limit N` samples the plan, `zl.py setup` reports missing collections; `[library] title_prefix = false`
   leaves titles untouched everywhere (add / tidy / recheck); docs/first-run.md; README trimmed to a front page with

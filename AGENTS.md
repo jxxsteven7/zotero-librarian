@@ -25,6 +25,7 @@ proposals/proposal.py       approval-mode batch data (RETAG / UNTAG / UNCOLLECT 
 docs/first-run.md docs/classifier.md   organizing an existing library; how classification works
 docs/notero.md              optional integration: mirroring the library to Notion with the Notero plugin (nothing in the code depends on it)
 CONTRIBUTING.md CHANGELOG.md   issue / PR procedure; one line per version
+tests/  .github/workflows/ci.yml   unit tests on synthetic papers (python3 -m unittest discover -s tests); CI = setup --offline + tests, 3 platforms
 logs/zotero-organize.log.md audit log, appended by the scripts (local to the machine, not in git)
 tools/                      eval_classify.py (measure the classifier on the library), fix_pdf_names.js (Zotero Run JavaScript)
 inbox/  cache/              staged downloads; library snapshot, full-text and API caches (not in git)
@@ -39,6 +40,7 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |
 | batch (approval mode) | `zl.py dump` -> edit `proposals/proposal.py` -> `zl.py proposal` -> `zl.py apply --dry-run / --plan / --apply` |
 | new machine | `./setup.sh` (= `zl.py setup`); `zl.py install` puts `zl` on PATH and the skills in the user-level skill dirs (use from anywhere) |
+| before pushing | `zl.py setup --offline` and `python3 -m unittest discover -s tests` — what CI runs on Ubuntu / macOS / Windows |
 
 ## Access rules (hard constraints)
 
@@ -81,7 +83,8 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
   only imports it.
 - **Platform-neutral**: Ubuntu, macOS and Windows, standard library only, Python 3.11+. Paths, credentials and external programs
   come from `config.py` only (no `~`, no `/tmp`, no hard-coded separators elsewhere); text files are read and written as UTF-8;
-  docs say `python3` and note that Windows uses `python`. `zl.py setup` must pass on all three before a version is tagged.
+  docs say `python3` and note that Windows uses `python`. CI (`.github/workflows/ci.yml`) runs `zl.py setup --offline` and the tests on
+  all three for every push; the full `zl.py setup` must pass on all three before a major version is tagged.
 
 ## Collections and tags
 
