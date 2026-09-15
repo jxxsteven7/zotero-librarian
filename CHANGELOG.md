@@ -2,6 +2,9 @@
 
 One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
 
+- **v0.5** (2026-09-15) — remove the approval-mode batch feature (`proposals/proposal.py`, `zl.py proposal`, `zl.py apply`,
+  `batch.py`): library-wide edits declared in a Python file were used once, for the first pass over the original library;
+  `add` / `tidy` / `tag` / `untag` / `set` / `recheck --write` cover everything since. Lighter surface for the release.
 - **v0.4** (2026-09-15) — CI on Ubuntu / macOS / Windows (`.github/workflows/ci.yml`): `zl.py setup --offline` (repository
   checks only: Python, taxonomy, skills mirror and frontmatter — no Zotero, no network) + `tests/` (rule engine, agent
   adjudication round trip, titles, skills, CLI on synthetic papers, standard-library unittest). A stale `.claude/skills` copy or

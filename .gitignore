@@ -4,6 +4,5 @@
 cache/
 inbox/
 logs/
-proposals/proposal.md
 __pycache__/
 *.pyc

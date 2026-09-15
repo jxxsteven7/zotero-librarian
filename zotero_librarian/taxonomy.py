@@ -22,7 +22,7 @@ SURVEY_HOME = next((c["name"] for c in COLLECTION_RULES if c.get("survey_home"))
 FAMILY_RULES = T["families"]
 STATUS = FAMILY_RULES["status"]
 READ_AXIS = tuple(STATUS["read_axis"])
-FAMILIES = tuple(f for f in FAMILY_RULES if f not in ("status", "type"))     # the judgement families (proposal table columns)
+FAMILIES = tuple(f for f in FAMILY_RULES if f not in ("status", "type"))     # the judgement families (not status / type)
 VOCAB = {f: (set(v["values"]) if isinstance(v.get("values"), list) else set(v.get("values", {}))) for f, v in FAMILY_RULES.items()}
 
 # tag -> rule dict (patterns, weak, sure, maybe, head, ...) for the families the classifier scores

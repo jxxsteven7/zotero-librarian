@@ -33,10 +33,8 @@ Finding papers
   refs <key|arXiv|DOI|link> [--top 15]   references and citations of one paper, cross-checked with the library
   refs --library [--top 20]              citation links between library papers
 
-Library and batch
+Library
   dump [--table]           read-only snapshot -> cache/library_dump.json
-  proposal                 render proposals/proposal.py -> proposals/proposal.md
-  apply --dry-run|--plan|--apply [--only K1,K2] [--no-rename] [--no-status]   batch write (approval mode)
   setup [--sync-skills] [--offline]   health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills /
                            agents); --offline = repository checks only (what CI runs; no Zotero, no network)
   install [--remove]       use it from anywhere: launcher `zl` on PATH + user-level skills for Claude Code / Codex / Kimi
@@ -127,12 +125,6 @@ def main(argv=None):
         else: citations.one(args[0], top=_opt(args, "--top", 15, int))
     elif cmd == "dump":
         from . import localdb; localdb.dump(table="--table" in args)
-    elif cmd == "proposal":
-        import importlib.util
-        from .config import PROPOSAL_PY
-        spec = importlib.util.spec_from_file_location("proposal", PROPOSAL_PY); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); mod.run(args)
-    elif cmd == "apply":
-        from . import batch; batch.run(args)
     elif cmd == "setup":
         from . import setup_check; setup_check.run(args)
     elif cmd == "install":

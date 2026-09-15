@@ -62,7 +62,7 @@ if you want your titles left alone). Step by step: [docs/first-run.md](docs/firs
 | `/tidy` · `zl.py tidy` | Papers you dropped into Zotero by hand: metadata, title, URL, short title, tags, collection. |
 | `/discover` · `zl.py discover` | Last N days of arXiv / HF papers scored against *your* tags. Nothing saved. |
 | `/refs` · `zl.py refs <paper>` | References and citations (Semantic Scholar) split into "have" / "missing"; `--library` maps citations among your own papers. |
-| `zl.py recheck` · `tag` · `untag` · `set` · `apply` | Re-verify venues and dates; single-item edits; approval-mode batch changes. |
+| `zl.py recheck` · `tag` · `untag` · `set` | Re-verify venues and dates; single-item edits. |
 
 Conventions: titles `[YYYY-MMDD] [Venue] Title` (v1 date, venue abbreviation, `[arXiv]` until accepted); URL field =
 project page; tags `family:value` from `taxonomy.toml`, one reading status per item; PDFs saved by Zotero itself so

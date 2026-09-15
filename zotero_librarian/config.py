@@ -6,7 +6,6 @@ Layout (ROOT = the parent of this package):
   inbox/                         fetch staging area (json/pdf/txt), cleared after saving, not in git
   cache/library_dump.json        library snapshot from `zl.py dump`, not in git
   logs/zotero-organize.log.md    audit log of every write (local, not in git)
-  proposals/proposal.py          approval-mode batch data
 
 .env keys (KEY=VALUE per line; a file holding just the bare API key also works):
   ZOTERO_API_KEY     Zotero Web API key (zotero.org/settings/keys; personal library read/write + file access)
@@ -26,11 +25,9 @@ INBOX = os.path.join(ROOT, "inbox")
 CACHE = os.path.join(ROOT, "cache")
 DUMP = os.path.join(CACHE, "library_dump.json")
 LOG = os.path.join(ROOT, "logs", "zotero-organize.log.md")
-PROPOSAL_PY = os.path.join(ROOT, "proposals", "proposal.py")
 TAXONOMY_PATH = os.path.join(ROOT, "taxonomy.toml")
 SKILLS_SRC = os.path.join(ROOT, ".agents", "skills")           # the skills (Agent Skills format; Codex, Kimi and others read this)
 SKILLS_MIRROR = os.path.join(ROOT, ".claude", "skills")        # verbatim copy — the only place Claude Code looks
-PROPOSAL_MD = os.path.join(ROOT, "proposals", "proposal.md")
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 
@@ -42,7 +39,7 @@ for _s in (sys.stdout, sys.stderr):
 
 LOG_HEADER = """# Audit log
 
-Every write to the library is appended here by the scripts (`zl.py add / tidy / tag / untag / collect / set / recheck --write / apply`),
+Every write to the library is appended here by the scripts (`zl.py add / tidy / tag / untag / collect / set / recheck --write`),
 one section per action: `## <date> — <action>` followed by `- <key> | <title> | what changed`. Local to this machine, not in git.
 """
 

@@ -41,7 +41,7 @@ Nothing else decides anything. If a paper lands in the wrong place, the fix is a
    collection is genuinely ambiguous are printed as `PAUSE` with the exact command to finish each one
    (`zl.py tidy --only KEY --collection "..."`) — decide those from the printed abstract.
 6. **Afterwards** every item carries a `status:` tag, so `tidy` from now on only touches new hand-added items, and
-   `/download` handles new links. Correct single tags with `zl.py tag / untag`, batch corrections with `zl.py apply`.
+   `/download` handles new links. Correct tags with `zl.py tag / untag`.
 
 Two things the first run never does: it doesn't delete or move away anything (collections you already had stay, tags you
 already had stay — the scripts only add), and it doesn't rewrite a title that already has a `[date] [venue]` prefix

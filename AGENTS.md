@@ -16,7 +16,7 @@ zotero_librarian/     the package (stdlib only): classify / llm / pipeline / con
 .claude/skills/       verbatim copy for Claude Code (`/download`) — edit .agents/skills, then `zl.py setup --sync-skills`
 docs/                 first-run.md (existing library), classifier.md (how it decides), notero.md (optional Notion mirror)
 tests/  tools/        unittest on synthetic papers (CI, 3 platforms) · eval_classify.py (the library as ground truth)
-proposals/  logs/     approval-mode batch data · audit log written by the scripts (local, not in git)
+logs/                 audit log written by the scripts (local, not in git)
 ```
 
 | Task | Command |
@@ -26,7 +26,6 @@ proposals/  logs/     approval-mode batch data · audit log written by the scrip
 | edit one item | `zl.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why ...` · `collect <key> <collection>` · `set <key> url=...` |
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |
 | re-verify arXiv items | `zl.py dump && zl.py recheck [--dates] [--search]`, then `--write` after approval |
-| batch (approval mode) | `zl.py dump` -> edit `proposals/proposal.py` -> `zl.py proposal` -> `zl.py apply --dry-run / --apply` |
 | new machine / before pushing | `./setup.sh` (= `zl.py setup`; `install` puts `zl` on PATH) · `zl.py setup --offline` + `python3 -m unittest discover -s tests` + `python3 tools/check_commits.py` |
 
 ## Access rules (hard constraints)
@@ -92,6 +91,5 @@ part before the colon > title. PDF file names carry no prefix (Zotero rename tem
   lists candidates and flags, and resolves PAUSE rows by running the printed `zl.py save ...` line (`--collection` from the
   printed abstract, `--confirm` for an ADJUDICATE block). No grepping, no polling loops, no hand-written logs.
 - `tidy` skill: `zl.py tidy` on items without a status tag — same pauses, same report. `discover` / `refs` only print tables.
-- Batch changes stay in approval mode (`proposals/proposal.py` -> `zl.py proposal` -> table -> `zl.py apply --apply`).
 - Changing the classifier: edit `taxonomy.toml`, add a synthetic case to `tests/`, run `python3 tools/eval_classify.py` (and
   `--llm`) and keep precision from dropping. Details: `docs/classifier.md`.
