@@ -51,6 +51,24 @@ class Rules(unittest.TestCase):
         sg = classify.suggest("Touch2Trace", a, body)
         self.assertIn("embod:dex-hand", sg["sure"]); self.assertNotIn("embod:gripper", sg["sure"]); self.assertIn("embod:gripper", sg["maybe"])
 
+    def test_appendix_after_the_reference_list_is_kept(self):
+        """NeurIPS / CoRL layout: References, then Appendix A with the robot setup. The list is cut, the appendix is not."""
+        a = "We study viewpoint robustness of flow-based VLA policies using a scene RGB image, language and proprioception."
+        refs = "\n".join(f"[{i}] A. Author, B. Author. Some robot learning paper. In Proc. CoRL, 20{20 + i % 6}." for i in range(12))
+        method = "\n\nMethod. We regularize the action-flow velocity field with a cross-view consistency loss on action-equivalent view pairs. " * 12
+        body = (a + method + "\n\nReferences\n" + refs + "\n\nA\n\nReal-Robot Details\n\nRobot and action space: RealMan RM-75 7-DoF manipulator with a "
+                "parallel-jaw gripper at 15 Hz. The RealMan arm executes delta end-effector actions; the parallel-jaw gripper opens at the end.")
+        cut = classify.cut_refs(body)
+        self.assertNotIn("Some robot learning paper", cut); self.assertIn("RM-75", cut)
+        sg = classify.suggest("Cross-View Action Consistency", a, body)
+        self.assertIn("embod:single-arm", sg["sure"]); self.assertTrue("embod:gripper" in sg["sure"] or "embod:gripper" in sg["maybe"])
+
+    def test_negated_modality_in_the_abstract_is_not_assigned(self):
+        a = ("We learn a policy from a scene RGB image, language and proprioception, without camera labels, extrinsics, depth, "
+             "or point-cloud inputs. Experiments on a Franka Panda arm.")
+        sg = classify.suggest("Camera-Robust Policies", a, a)
+        self.assertIn("modality:vision", sg["sure"]); self.assertNotIn("modality:point-cloud", sg["sure"]); self.assertNotIn("modality:depth", sg["sure"])
+
     def test_humanoid_paper(self):
         a = ("We propose a whole-body controller for humanoid robots. Reinforcement learning in simulation with sim-to-real transfer "
              "enables robust locomotion and motion tracking on a Unitree G1 humanoid robot.")

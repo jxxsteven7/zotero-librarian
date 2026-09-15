@@ -146,7 +146,7 @@ maybe = 1.5
 
 [families.embod.values."single-arm"]
 description = "One robot arm (Franka, UR5, xArm, Kinova, KUKA...)."
-patterns = ["single[- ]arm", "\\bFranka\\b|\\bPanda\\b|\\bUR ?5e?\\b|\\bUR ?10e?\\b|\\bUR ?7e\\b|\\bUR ?3e?\\b|\\bxArm\\b|\\bKinova\\b|\\bKUKA\\b|\\biiwa\\b|\\bWidowX\\b|\\bFlexiv\\b|\\bRizon\\b|\\bRealMan\\b|\\bRM-65\\b|\\bSawyer\\b|\\bJaco\\b|\\bPiper\\b|\\bSO-?10[01]\\b|\\bKoch\\b|\\bViperX\\b|\\b7-DoF arm"]
+patterns = ["single[- ]arm", "\\bFranka\\b|\\bPanda\\b|\\bUR ?5e?\\b|\\bUR ?10e?\\b|\\bUR ?7e\\b|\\bUR ?3e?\\b|\\bxArm\\b|\\bKinova\\b|\\bKUKA\\b|\\biiwa\\b|\\bWidowX\\b|\\bFlexiv\\b|\\bRizon\\b|\\bRealMan\\b|\\bRM-(65|75)\\b|\\bSawyer\\b|\\bJaco\\b|\\bPiper\\b|\\bSO-?10[01]\\b|\\bKoch\\b|\\bViperX\\b|\\b[67]-DoF (arm|manipulator)"]
 weak = ["robot(ic)? arms?"]
 sure = 3
 maybe = 1

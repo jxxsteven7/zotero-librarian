@@ -43,13 +43,25 @@ def _rx(pat):
     return _rx_cache[pat]
 
 
+APPENDIX_RE = re.compile(r"^\s*(appendix|appendices|supplementary|supplemental)\b", re.I)
+APPENDIX_LETTER_RE = re.compile(r"^\s*[A-Z]\.?\s*$|^\s*[A-Z]\.\d+\s*$|^\s*[A-Z]\.?\s+[A-Z][^,.;:]{2,60}\s*$")   # "A", "A.1", "A Dataset Details"
+REFLINE_RE = re.compile(r"\b(19|20)\d\d\b|arxiv|doi\.org|\bpp\.|\bIn Proc|\bURL\b", re.I)
+
+
 def cut_refs(text):
-    """Drop everything after the last 'References' heading (an appendix before it is kept)."""
+    """Drop the reference list: from the last 'References' heading to the appendix that follows it, if any. NeurIPS / CoRL
+    style puts the appendix after the references, and the robot setup is usually there; an appendix before the list is kept."""
     if not text: return ""
     hits = list(REFS_RE.finditer(text))
     if not hits: return text
     cut = hits[-1].start()
-    return text[:cut] if cut > len(text) * 0.3 else text            # a heading that early is a table of contents, not the list
+    if cut <= len(text) * 0.3: return text                          # a heading that early is a table of contents, not the list
+    lines = text[cut:].split("\n")
+    for i, line in enumerate(lines[2:], 2):                         # 0-1 are the heading itself
+        if not (APPENDIX_RE.match(line) or APPENDIX_LETTER_RE.match(line)): continue
+        if sum(1 for l in lines[i + 1:i + 9] if REFLINE_RE.search(l)) >= 2: continue   # a reference entry that happens to look like a heading
+        return text[:cut] + "\n" + "\n".join(lines[i:])
+    return text[:cut]
 
 
 def snip(text, m, n=70):
@@ -65,7 +77,7 @@ def score_tag(tag, title, abstract, body):
         rx = _rx(pat)
         for m in rx.finditer(head):
             if w < 1: continue                                                  # weak words in the abstract are not the paper speaking
-            if tag.startswith("method:") and tx.NEGATIVE_CONTEXT and tx.NEGATIVE_CONTEXT.search(head[max(0, m.start() - 60):m.start()]): continue
+            if tag.split(":")[0] in ("method", "modality") and tx.NEGATIVE_CONTEXT and tx.NEGATIVE_CONTEXT.search(head[max(0, m.start() - 60):m.start()]): continue   # "without depth or point-cloud inputs"
             head_hits += 1
             if len(ev) < 2: ev.append(("abstract" if m.start() > len(title) else "title", snip(head, m)))
         ms = list(rx.finditer(body))
