@@ -104,12 +104,11 @@ tests/  .github/workflows/ci.yml         unit tests on synthetic papers; CI runs
 ## Contributing
 
 Issues and PRs welcome — taxonomies for other fields most of all. The procedure, step by step, is in
-[CONTRIBUTING.md](CONTRIBUTING.md); commit descriptions and reviews follow Google's
-[CL descriptions](https://google.github.io/eng-practices/review/developer/cl-descriptions.html) and
+[CONTRIBUTING.md](CONTRIBUTING.md); reviews follow Google's
 [standard of code review](https://google.github.io/eng-practices/review/reviewer/standard.html). CI runs
 `python3 zl.py setup --offline` and `python3 -m unittest discover -s tests` on the three platforms for every PR — the same two
 commands you run before pushing (neither needs a Zotero library) — and `tools/check_commits.py`, which enforces the version rule
-(only a `vX.Y:` commit changes `__version__`, and it adds the `CHANGELOG.md` line).
+(a commit that changes the code, the taxonomy or the skills is `vX.Y:` and bumps `__version__` + `CHANGELOG.md`).
 
 ## Status · License
 
@@ -135,9 +134,8 @@ Nothing here is bundled from another project; these are the things it talks to o
 - [Agent Skills](https://agentskills.io) (specification, Apache-2.0) — the `.agents/skills/` format read by Codex,
   Kimi Code CLI and others; [Claude Code](https://code.claude.com/docs/en/skills), [Codex](https://developers.openai.com/codex/skills)
   and [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) documentation for where each one looks.
-- [Google engineering practices](https://google.github.io/eng-practices/) — the commit-description and code-review
-  rules in `AGENTS.md` / `CONTRIBUTING.md` are adapted from *Writing good CL descriptions* and *The standard of code
-  review* (© Google, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)).
+- [Google engineering practices](https://google.github.io/eng-practices/) — the review rule in `AGENTS.md` /
+  `CONTRIBUTING.md` is adapted from *The standard of code review* (© Google, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)).
 - [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) (MIT) — the precedent for keeping the agent
   layer as plain Markdown skills that several CLIs can read.
 - Badges by [shields.io](https://shields.io); logos from [Simple Icons](https://simpleicons.org) (CC0; the marks belong

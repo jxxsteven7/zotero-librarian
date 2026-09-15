@@ -18,15 +18,13 @@ something that won't be merged.
    English.
 4. Check it: `python3 zl.py setup --offline` and `python3 -m unittest discover -s tests` pass (neither needs a Zotero
    library; CI runs both on Ubuntu, macOS and Windows for every PR, so a failure there is not a surprise). CI also runs
-   `python3 tools/check_commits.py` on your commits: only a commit titled `vX.Y: ...` may change `__version__`, and it must
-   add the `**vX.Y**` line to `CHANGELOG.md` — as a contributor you simply don't touch either. If you
+   `python3 tools/check_commits.py` on your commits: a commit that touches the code, the taxonomy or the skills must be
+   titled `vX.Y: ...`, set `__version__` to X.Y and add the `**vX.Y**` line to `CHANGELOG.md` (docs / tests / tools-only
+   commits are plain). Do it on your last commit, or leave it to the maintainer to squash-merge with that title. If you
    touched `taxonomy.toml` or the classifier, `python3 tools/eval_classify.py` before and after (precision must not
    drop; paste both numbers in the PR). A new rule or a fixed corner case gets a synthetic case in `tests/`.
-5. Commit and push to your fork: `git commit` with a message written the way Google's
-   [*Writing good CL descriptions*](https://google.github.io/eng-practices/review/developer/cl-descriptions.html)
-   says — a first line that is a short imperative summary standing on its own ("Add a taxonomy for NLP" rather than
-   "changes"), a blank line, then *what* and *why* (the problem, your approach, limitations, numbers) — and
-   `git push -u origin my-change`.
+5. Commit and push to your fork: one-line commit messages saying what changed ("Add a taxonomy for NLP" rather than
+   "changes"); the *why* goes in the PR description. `git push -u origin my-change`.
 6. On GitHub, *Compare & pull request*. The template asks what changed, why, how you tested it and on which
    platform / agent. One feature per PR; small PRs are reviewed faster.
 7. Review follows Google's [*The Standard of Code Review*](https://google.github.io/eng-practices/review/reviewer/standard.html):

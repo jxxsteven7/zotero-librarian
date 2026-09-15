@@ -42,14 +42,12 @@ logs/                 audit log written by the scripts (local, not in git)
 
 ## Repository rules
 
-- English everywhere, commit messages included. **One feature = one commit** titled `vX.Y: <what changed>` that bumps
-  `__version__` (`zotero_librarian/__init__.py`) and adds the line to `CHANGELOG.md`; Y grows by one per feature / merged PR,
-  the maintainer bumps X and tags major versions. Fixes that are not a feature are plain commits (CI checks both: `tools/check_commits.py`). Never commit `.env`,
-  `cache/`, `inbox/`, `logs/`.
-- Commit and PR descriptions follow Google's *Writing good CL descriptions*
-  (https://google.github.io/eng-practices/review/developer/cl-descriptions.html; adapted, © Google, CC BY 3.0): first line
-  a short imperative summary that stands alone in `git log`, blank line, then **what** and **why** — problem, approach,
-  limitations, numbers — readable without following links. Re-read it before merging; changes drift during review.
+- English everywhere. **A commit message is one line** (imperative, what changed); a body only when the why is not obvious,
+  two lines at most. Never commit `.env`, `cache/`, `inbox/`, `logs/`.
+- **Versions are mechanical**: a commit that touches behaviour (`zl.py`, `zotero_librarian/`, `taxonomy.toml`, the skills)
+  is titled `vX.Y: <what changed>`, bumps `__version__` (`zotero_librarian/__init__.py`) and adds that line to
+  `CHANGELOG.md` — Y +1 every time, fixes included; docs / tests / tools / CI-only commits are plain. The maintainer bumps X
+  and tags major versions. `tools/check_commits.py` enforces all of it in CI.
 - Review follows Google's *The Standard of Code Review* (https://google.github.io/eng-practices/review/reviewer/standard.html):
   approve once the change clearly improves the code's overall health, even if imperfect; facts and data over opinions; this
   file and consistency with existing code settle style; `Nit:` marks optional remarks; the maintainer breaks ties.

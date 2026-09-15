@@ -3,12 +3,14 @@
 
     python3 tools/check_commits.py [<rev-range>]        default: origin/main..HEAD
 
-A commit titled `vX.Y: ...` must set `__version__ = "X.Y"` and add a `**vX.Y**` entry to CHANGELOG.md, and a commit that
-changes `__version__` must be titled that way. Each commit is checked against its own tree, so a push with v0.5 followed
-by v0.6 passes. Merge commits are skipped. Exit 1 with one line per violation."""
+A commit that touches behaviour (zl.py, zotero_librarian/, taxonomy.toml, the skills) must be titled `vX.Y: ...`; such a
+title must come with `__version__ = "X.Y"` and a `**vX.Y**` entry in CHANGELOG.md; and only such a commit may change
+`__version__`. Each commit is checked against its own tree, so a push with v0.5 followed by v0.6 passes. Merge commits
+are skipped. Exit 1 with one line per violation."""
 import re, subprocess, sys
 
 INIT, CHANGELOG = "zotero_librarian/__init__.py", "CHANGELOG.md"
+BEHAVIOUR = ("zl.py", "zotero_librarian/", "taxonomy.toml", ".agents/skills/", ".claude/skills/")
 
 
 def git(*args):
@@ -36,6 +38,9 @@ def check(sha):
         if f"**v{want}**" not in file_at(sha, CHANGELOG): problems.append(f"{CHANGELOG} has no **v{want}** entry")
     elif prev is not None and ver != prev:
         problems.append(f"changes __version__ {prev} -> {ver} but the title does not start with `v{ver}:`")
+    elif prev is not None:
+        touched = [f for f in git("show", "--format=", "--name-only", sha).split() if f.startswith(BEHAVIOUR)]
+        if touched: problems.append(f"touches {touched[0]}{' ...' if len(touched) > 1 else ''} without a `vX.Y:` title")
     return [(sha[:7], title, p) for p in problems]
 
 
