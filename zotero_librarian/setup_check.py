@@ -12,8 +12,7 @@ import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 from . import config, llm
 from .http import UA_LOCAL
 
-SKILLS_SRC = os.path.join(config.ROOT, ".agents", "skills")            # Agent Skills standard location (Codex, Kimi, ...)
-SKILLS_MIRROR = os.path.join(config.ROOT, ".claude", "skills")          # Claude Code only reads this one
+SKILLS_SRC, SKILLS_MIRROR = config.SKILLS_SRC, config.SKILLS_MIRROR
 AGENTS = [("Claude Code", "claude", "/download <link>"), ("Codex", "codex", "$download <link>"), ("Kimi Code CLI", "kimi", "/skill:download <link>")]
 
 

@@ -63,7 +63,8 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
   maintainer, who tags the major versions (`git tag vX.0`). Fixes that are not a feature are plain commits without a version.
   Never commit `.env`, `cache/`, `inbox/`, `logs/`.
 - **Commit and PR descriptions** follow Google's engineering practices, *Writing good CL descriptions*
-  (https://google.github.io/eng-practices/review/developer/cl-descriptions.html): the first line is a short, complete,
+  (https://google.github.io/eng-practices/review/developer/cl-descriptions.html; the two rules below are adapted from
+  that documentation, © Google, CC BY 3.0): the first line is a short, complete,
   imperative summary that stands alone in `git log` ("Delete X and replace it with Y", never "Fix bug" / "Add functions"),
   then a blank line, then a body that says **what** changed and **why** — the problem, the approach taken, its limitations,
   and the numbers (eval precision / recall, timings) — so that the description is understood without following links.

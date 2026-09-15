@@ -12,8 +12,7 @@ import os, shutil, sys
 
 from . import config
 
-ROOT = config.ROOT
-SRC = os.path.join(ROOT, ".agents", "skills")
+ROOT, SRC = config.ROOT, config.SKILLS_SRC
 HOME = os.path.expanduser("~")
 # user-level skill directories: Claude Code reads ~/.claude/skills; Codex and Kimi read ~/.agents/skills (Kimi also ~/.claude/skills)
 USER_SKILL_DIRS = [os.path.join(HOME, ".claude", "skills"), os.path.join(HOME, ".agents", "skills")]

@@ -65,7 +65,9 @@ if you want your titles left alone). Step by step: [docs/first-run.md](docs/firs
 
 Conventions: titles `[YYYY-MMDD] [Venue] Title` (v1 date, venue abbreviation, `[arXiv]` until accepted); URL field =
 project page; tags `family:value` from `taxonomy.toml`, one reading status per item; PDFs saved by Zotero itself so
-they sync everywhere; every write logged locally, nothing ever deleted.
+they sync everywhere; every write logged locally, nothing ever deleted. The tool ends at Zotero — if you also mirror
+the library to Notion with the [Notero](https://github.com/dvanoni/notero) plugin, these conventions are what make the
+mirror useful (Short Title = page title, URL = project page); the recipe is in [docs/notero.md](docs/notero.md).
 
 ## Works with
 
@@ -108,3 +110,31 @@ Issues and PRs welcome — taxonomies for other fields most of all. The procedur
 
 Used daily by its author on one robot-learning library from three machines; Zotero 7 and 10. The connector endpoints
 are the ones the official browser connector uses, not a documented API. MIT.
+
+## Credits and references
+
+Nothing here is bundled from another project; these are the things it talks to or follows, with their terms.
+
+- [Zotero](https://www.zotero.org) — the [Web API](https://www.zotero.org/support/dev/web_api/v3/start) for edits and the
+  desktop [connector](https://github.com/zotero/zotero-connectors) endpoints for new items and PDFs; the local database is only
+  ever read from a copy. Zotero is AGPL-3.0 software; no Zotero code is included.
+- [Notero](https://github.com/dvanoni/notero) by David Vanoni (MIT) — optional Notion mirror; `docs/notero.md` documents
+  its configuration, this tool contains no Notero code.
+- [Ollama](https://ollama.com) (MIT) and any OpenAI-compatible server — local adjudication; the default model is
+  [Qwen3.5](https://huggingface.co/Qwen) (Apache-2.0), pulled by you.
+- [arXiv API](https://info.arxiv.org/help/api/index.html) ([terms of use](https://info.arxiv.org/help/api/tou.html)),
+  [Crossref REST API](https://api.crossref.org), [Semantic Scholar Academic Graph API](https://api.semanticscholar.org)
+  ([license](https://api.semanticscholar.org/license)), [OpenReview](https://openreview.net),
+  [Hugging Face daily papers](https://huggingface.co/papers) — metadata, venues, citations, discovery. Polite rates only;
+  bring your own keys where they offer them (`S2_API_KEY`). Thank you, arXiv, for use of its open access interoperability.
+- [Agent Skills](https://agentskills.io) (specification, Apache-2.0) — the `.agents/skills/` format read by Codex,
+  Kimi Code CLI and others; [Claude Code](https://code.claude.com/docs/en/skills), [Codex](https://developers.openai.com/codex/skills)
+  and [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) documentation for where each one looks.
+- [Google engineering practices](https://google.github.io/eng-practices/) — the commit-description and code-review
+  rules in `AGENTS.md` / `CONTRIBUTING.md` are adapted from *Writing good CL descriptions* and *The standard of code
+  review* (© Google, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)).
+- [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) (MIT) — the precedent for keeping the agent
+  layer as plain Markdown skills that several CLIs can read.
+- Badges by [shields.io](https://shields.io); logos from [Simple Icons](https://simpleicons.org) (CC0; the marks belong
+  to their owners). Claude, Codex, Kimi, Zotero, Notion and Ollama are trademarks of their respective owners; this
+  project is not affiliated with any of them.
