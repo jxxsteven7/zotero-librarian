@@ -1,5 +1,6 @@
 # Every push and pull request: the repository checks on the three platforms the tool supports.
-# Nothing here touches a Zotero library or the network: `setup --offline` + the unit tests (synthetic papers).
+# Nothing here touches a Zotero library or the network: `setup --offline` + the unit tests (synthetic papers), and the
+# version rule of AGENTS.md on the pushed commits (tools/check_commits.py).
 name: ci
 on: [push, pull_request]
 jobs:
@@ -22,3 +23,11 @@ jobs:
       - name: the checks must not modify the repository
         run: git status --porcelain && test -z "$(git status --porcelain)"
         shell: bash
+  commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: a `vX.Y:` commit bumps __version__ and CHANGELOG.md, and nothing else bumps them
+        run: python3 tools/check_commits.py "${{ github.event.pull_request.base.sha || github.event.before }}..${{ github.event.pull_request.head.sha || github.sha }}"

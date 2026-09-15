@@ -17,7 +17,9 @@ something that won't be merged.
    agent-neutral and `.agents/skills` / `.claude/skills` identical (`python3 zl.py setup --sync-skills`); everything in
    English.
 4. Check it: `python3 zl.py setup --offline` and `python3 -m unittest discover -s tests` pass (neither needs a Zotero
-   library; CI runs both on Ubuntu, macOS and Windows for every PR, so a failure there is not a surprise), and if you
+   library; CI runs both on Ubuntu, macOS and Windows for every PR, so a failure there is not a surprise). CI also runs
+   `python3 tools/check_commits.py` on your commits: only a commit titled `vX.Y: ...` may change `__version__`, and it must
+   add the `**vX.Y**` line to `CHANGELOG.md` — as a contributor you simply don't touch either. If you
    touched `taxonomy.toml` or the classifier, `python3 tools/eval_classify.py` before and after (precision must not
    drop; paste both numbers in the PR). A new rule or a fixed corner case gets a synthetic case in `tests/`.
 5. Commit and push to your fork: `git commit` with a message written the way Google's

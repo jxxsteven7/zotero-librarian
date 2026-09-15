@@ -96,7 +96,7 @@ rules + qwen3.5:9b 0.87 / 0.81, 127 / 129 collections. Edit the taxonomy for you
 zl.py  taxonomy.toml  AGENTS.md          entry point · your collections, tags, rules, venues · the agent's rules (CLAUDE.md imports it)
 zotero_librarian/                        fetch / classify / llm / pipeline / connector / zapi / ... (stdlib only)
 .agents/skills/  .claude/skills/         download · tidy · discover · refs  (source · verbatim copy)
-docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md · eval_classify.py, fix_pdf_names.js · one line per version
+docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md · eval_classify.py, check_commits.py, fix_pdf_names.js · one line per version
 tests/  .github/workflows/ci.yml         unit tests on synthetic papers; CI runs them + `zl.py setup --offline` on Ubuntu, macOS, Windows
 .env  cache/  inbox/  logs/              per machine, git-ignored
 ```
@@ -108,7 +108,8 @@ Issues and PRs welcome — taxonomies for other fields most of all. The procedur
 [CL descriptions](https://google.github.io/eng-practices/review/developer/cl-descriptions.html) and
 [standard of code review](https://google.github.io/eng-practices/review/reviewer/standard.html). CI runs
 `python3 zl.py setup --offline` and `python3 -m unittest discover -s tests` on the three platforms for every PR — the same two
-commands you run before pushing (neither needs a Zotero library).
+commands you run before pushing (neither needs a Zotero library) — and `tools/check_commits.py`, which enforces the version rule
+(only a `vX.Y:` commit changes `__version__`, and it adds the `CHANGELOG.md` line).
 
 ## Status · License
 

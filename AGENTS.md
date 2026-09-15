@@ -27,7 +27,7 @@ proposals/  logs/     approval-mode batch data · audit log written by the scrip
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |
 | re-verify arXiv items | `zl.py dump && zl.py recheck [--dates] [--search]`, then `--write` after approval |
 | batch (approval mode) | `zl.py dump` -> edit `proposals/proposal.py` -> `zl.py proposal` -> `zl.py apply --dry-run / --apply` |
-| new machine / before pushing | `./setup.sh` (= `zl.py setup`; `install` puts `zl` on PATH) · `zl.py setup --offline` + `python3 -m unittest discover -s tests` |
+| new machine / before pushing | `./setup.sh` (= `zl.py setup`; `install` puts `zl` on PATH) · `zl.py setup --offline` + `python3 -m unittest discover -s tests` + `python3 tools/check_commits.py` |
 
 ## Access rules (hard constraints)
 
@@ -45,7 +45,7 @@ proposals/  logs/     approval-mode batch data · audit log written by the scrip
 
 - English everywhere, commit messages included. **One feature = one commit** titled `vX.Y: <what changed>` that bumps
   `__version__` (`zotero_librarian/__init__.py`) and adds the line to `CHANGELOG.md`; Y grows by one per feature / merged PR,
-  the maintainer bumps X and tags major versions. Fixes that are not a feature are plain commits. Never commit `.env`,
+  the maintainer bumps X and tags major versions. Fixes that are not a feature are plain commits (CI checks both: `tools/check_commits.py`). Never commit `.env`,
   `cache/`, `inbox/`, `logs/`.
 - Commit and PR descriptions follow Google's *Writing good CL descriptions*
   (https://google.github.io/eng-practices/review/developer/cl-descriptions.html; adapted, © Google, CC BY 3.0): first line

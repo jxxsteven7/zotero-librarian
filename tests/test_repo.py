@@ -1,5 +1,5 @@
-"""Repository consistency: the skills every agent reads, the CLI entry point, the taxonomy's venues."""
-import os, subprocess, sys, unittest
+"""Repository consistency: the skills every agent reads, the CLI entry point, the version and changelog, the taxonomy."""
+import os, re, subprocess, sys, unittest
 
 from zotero_librarian import __version__, config, setup_check, taxonomy as tx
 
@@ -25,6 +25,13 @@ class Cli(unittest.TestCase):
         for cmd in ("add", "tidy", "discover", "refs", "setup", "install"): self.assertIn(f"\n  {cmd} ", out, cmd)
     def test_setup_offline_passes(self):
         r = self.run_zl("setup", "--offline"); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
+class Version(unittest.TestCase):
+    def test_changelog_starts_with_the_current_version(self):
+        """The version rule (AGENTS.md): the newest CHANGELOG entry is __version__; tools/check_commits.py checks each commit."""
+        log = open(os.path.join(config.ROOT, "CHANGELOG.md"), encoding="utf-8").read()
+        self.assertEqual(re.search(r"^- \*\*v([\d.]+)\*\*", log, re.M).group(1), __version__)
 
 
 class Taxonomy(unittest.TestCase):
