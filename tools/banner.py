@@ -3,7 +3,7 @@
 
     python3 tools/banner.py [docs/library.png] [docs/banner.png] [github|xhs]
 
-github = 1280 x 640; xhs = 1600 x 1200 (4:3, padded, repo address at the foot). Needs Pillow (`pip install pillow`) and a
+github = 1280 x 640; xhs = 1600 x 1200 (4:3, centred; no address on it — Xiaohongshu throttles posts whose pictures carry a link). Needs Pillow (`pip install pillow`) and a
 sans + mono TrueType font (DejaVu on Linux, Arial / Menlo / Consolas elsewhere). The left column is text, the right side
 the whole Zotero window with the item pane's tag block repeated at actual size."""
 import sys
@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "docs" / "library.png")
 OUT = Path(sys.argv[2] if len(sys.argv) > 2 else ROOT / "docs" / "banner.png")
 KIND = sys.argv[3] if len(sys.argv) > 3 else "github"
-S, W, H, OY = {"github": (1.0, 1280, 640, 0), "xhs": (1.25, 1600, 1200, 150)}[KIND]
+S, W, H, OY = {"github": (1.0, 1280, 640, 0), "xhs": (1.25, 1600, 1200, 200)}[KIND]
 BG, FG, SOFT, MUTED, LINE, ACCENT = (15, 23, 42), (248, 250, 252), (226, 232, 240), (148, 163, 184), (71, 85, 105), (204, 41, 54)
 
 
@@ -97,12 +97,9 @@ text(556, IY + 8, "[date] [venue] Title", f(SANS_B, 16), SOFT)
 for i, s in enumerate(("project page in the URL field", "one reading status per paper", "PDFs synced by Zotero itself", "every write logged, nothing deleted")):
     text(556, IY + 32 + 22 * i, s, f(SANS, 15), MUTED)
 
-if KIND == "xhs":                       # links are not clickable there: the address goes on the picture
-    url, fu = "github.com/jxxsteven7/zotero-librarian", f(MONO, 22)
-    d.line((X(52), H - OY + X(40), W - X(52), H - OY + X(40)), fill=LINE, width=1)
-    d.text(((W - d.textlength(url, font=fu)) / 2, H - OY + X(64)), url, font=fu, fill=SOFT)
-    sub, fs = "open source · MIT · issues and PRs welcome", f(SANS, 15)
-    d.text(((W - d.textlength(sub, font=fs)) / 2, H - OY + X(100)), sub, font=fs, fill=MUTED)
+if KIND == "xhs":                       # no URL, no handle: the name at the top left is what people search for
+    sub, fs = "open source · MIT", f(SANS, 17)
+    d.text(((W - d.textlength(sub, font=fs)) / 2, H - OY + X(80)), sub, font=fs, fill=MUTED)
 
 img.save(OUT, optimize=True)
 print(OUT, img.size)
