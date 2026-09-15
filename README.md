@@ -1,5 +1,7 @@
 ![zotero-librarian: your coding agent files papers into Zotero](docs/banner.png)
 
+**English** · [简体中文](README.zh-CN.md)
+
 [![Claude Code](https://img.shields.io/badge/Claude_Code-download-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/setup)
 [![Codex](https://img.shields.io/badge/Codex-download-000000?style=flat-square)](https://developers.openai.com/codex/cli/)
 [![Kimi Code CLI](https://img.shields.io/badge/Kimi_Code_CLI-download-1E6FFF?style=flat-square&logo=kimi&logoColor=white)](https://www.kimi.com/code)
