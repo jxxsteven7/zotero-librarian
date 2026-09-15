@@ -28,14 +28,21 @@
 
 ## 快速开始
 
+先做两件事，因为工具写入的一切都经过你的 Zotero 账号：
+
+1. **Zotero 7+ 已登录同步**（*设置 > 同步*，用你的 zotero.org 账号）。新论文经正在运行的客户端存入，已有条目经 Web API 修改，
+   靠同步让两边落在同一个库里。
+2. **给这个账号建一个 API key**：[zotero.org/settings/keys/new](https://www.zotero.org/settings/keys/new)，勾选
+   *Allow library access* 和 *Allow write access*（其他都不需要），复制 key。同一页上显示你的数字 **user ID**。
+
 ```bash
 git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian && cd ~/zotero-librarian
-cp .env.example .env        # 填 ZOTERO_API_KEY 和 ZOTERO_LIBRARY_ID（zotero.org/settings/keys）；数据目录自动探测
-./setup.sh                  # 体检，每一项缺失都会给出修复方法
+cp .env.example .env        # 把 key 填到 ZOTERO_API_KEY=，user ID 填到 ZOTERO_LIBRARY_ID=（留空的话 setup 会根据 key 查出来）
+./setup.sh                  # 体检，每一项缺失都会给出修复方法；数据目录自动探测
 claude                      # 或 codex，然后：/download <链接>
 ```
 
-需要 Python 3.11+（不用 pip 装任何东西）、`pdftotext`（poppler）或 `pip install pypdf`、开了同步的 Zotero 7+。
+需要 Python 3.11+（不用 pip 装任何东西）、`pdftotext`（poppler）或 `pip install pypdf`。
 可选：[Ollama](https://ollama.com) + `ollama pull qwen3.5:9b`（约 6 GB），让本地模型免费裁决边缘标签；没装的话只跑规则，
 并会说明这一点——在 `.env` 里设 `ZC_LLM=agent` 让 coding agent 来裁决，或 `ZC_LLM=off` 把候选留给你自己
 （[它怎么判断](docs/classifier.md)）。

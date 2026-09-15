@@ -122,9 +122,9 @@ def machine_checks(env, report):
         if not perm_ok: report(False, ".env is not mode 600", f"chmod 600 {config.ENV_PATH}", warn=True)
         bad = config.cred_problems(env)                                    # a copied .env.example still holds the placeholder text: not "set"
         report("ZOTERO_API_KEY" not in bad, "ZOTERO_API_KEY " + bad.get("ZOTERO_API_KEY", "set"),
-               "create one at https://www.zotero.org/settings/keys (personal library read/write + file access) and put ZOTERO_API_KEY=... in .env")
+               "create one at https://www.zotero.org/settings/keys/new (tick Allow library access + Allow write access) and put ZOTERO_API_KEY=... in .env")
         report("ZOTERO_LIBRARY_ID" not in bad, "ZOTERO_LIBRARY_ID " + bad.get("ZOTERO_LIBRARY_ID", "set"),
-               "your numeric user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env")
+               "your numeric user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env (with a valid key, setup prints it below)")
     else:
         report(False, ".env missing", "cp .env.example .env (then chmod 600 .env on Linux/macOS) and fill ZOTERO_API_KEY / ZOTERO_LIBRARY_ID; the data directory is auto-detected")
 
@@ -176,7 +176,7 @@ def service_checks(env, report):
             js = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.zotero.org/keys/current", headers=hdr), timeout=15).read())
             report(True, f"the API key belongs to user id {js.get('userID')} — put ZOTERO_LIBRARY_ID={js.get('userID')} in .env", warn=True)
         except urllib.error.HTTPError as e:
-            report(False, f"Web API returned {e.code} for the key", "403 = key invalid (create one at https://www.zotero.org/settings/keys)")
+            report(False, f"Web API returned {e.code} for the key", "403 = key invalid (create one at https://www.zotero.org/settings/keys/new)")
         except Exception as e:
             report(False, f"Web API unreachable: {e}", "network problem, see above")
     elif not bad:

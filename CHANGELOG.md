@@ -2,6 +2,10 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v0.14** (2026-09-15) — the Quick start (both READMEs) and `docs/first-run.md` open with the two prerequisites — Zotero
+  signed in to sync, an API key with *Allow library access* + *Allow write access*, the user ID shown next to it — instead of
+  a comment inside the code block; `setup` and `.env.example` name those options (there is no "file access" option to tick)
+  and say that `setup` looks the user ID up from a valid key.
 - **v0.13** (2026-09-15) — macOS test run + code review. `setup` no longer passes a copied `.env.example`: placeholder credentials
   are reported as such (`ZOTERO_API_KEY` one token, `ZOTERO_LIBRARY_ID` numeric), every Web API command stops on them with the
   same message instead of a URL error, and with a real key but no id `setup` prints the user id the key belongs to. A PDF without

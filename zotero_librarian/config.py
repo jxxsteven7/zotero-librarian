@@ -8,7 +8,7 @@ Layout (ROOT = the parent of this package):
   logs/zotero-organize.log.md    audit log of every write (local, not in git)
 
 .env keys (KEY=VALUE per line):
-  ZOTERO_API_KEY     Zotero Web API key (zotero.org/settings/keys; personal library read/write + file access)
+  ZOTERO_API_KEY     Zotero Web API key (zotero.org/settings/keys/new; Allow library access + Allow write access)
   ZOTERO_LIBRARY_ID  your user library id (zotero.org/settings/keys shows it)
   ZOTERO_DATA_DIR    Zotero data directory; if unset, read from Zotero's prefs.js (extensions.zotero.dataDir),
                      else the platform default (~/Zotero, Windows %USERPROFILE%\\Zotero)

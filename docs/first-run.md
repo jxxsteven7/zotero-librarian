@@ -25,8 +25,10 @@ Nothing else decides anything. If a paper lands in the wrong place, the fix is a
 1. **Edit `taxonomy.toml`** (or keep the shipped one to see how it behaves first). Collection names must be exactly
    the names you want in Zotero. If you don't want titles rewritten as `[YYYY-MMDD] [Venue] Title`, set
    `title_prefix = false` in `[library]` — every other convention still applies.
-2. **`python3 zl.py setup`** — besides the machine checks it tells you which of the taxonomy's collections don't
-   exist in your library yet. In Zotero itself, turn off *Settings > General > Automatically tag items with keywords
+2. **`python3 zl.py setup`**, with `.env` filled as in the README's Quick start (Zotero signed in to sync, an API key
+   with library + write access, your user ID) — the Web API is the only path that edits existing items, so nothing below
+   works without it. Besides the machine checks it tells you which of the taxonomy's collections don't exist in your
+   library yet. In Zotero itself, turn off *Settings > General > Automatically tag items with keywords
    and subject headings* on every client (`extensions.zotero.automaticTags`, a per-client setting): otherwise the
    connector adds publisher keywords as bare tags next to the vocabulary.
 3. **Choose the adjudicator for the bulk run.** `ZC_LLM=ollama` (free, ~2 s per paper) or `ZC_LLM=off` (rules only,

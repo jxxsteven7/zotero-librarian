@@ -30,14 +30,22 @@ read" in one command. Every tag comes with its evidence; the borderline ones are
 
 ## Quick start
 
+Two things come first, because everything the tool writes goes through your Zotero account:
+
+1. **Zotero 7+ signed in to sync** (*Settings > Sync*, your zotero.org account). New papers are saved through the running
+   client, existing items are edited through the Web API; sync is what makes both land in the same library.
+2. **An API key for that account**: [zotero.org/settings/keys/new](https://www.zotero.org/settings/keys/new), tick
+   *Allow library access* and *Allow write access* (nothing else is needed), copy the key. The same page shows your
+   numeric **user ID**.
+
 ```bash
 git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian && cd ~/zotero-librarian
-cp .env.example .env        # ZOTERO_API_KEY + ZOTERO_LIBRARY_ID (zotero.org/settings/keys); data dir is auto-detected
-./setup.sh                  # health check with the fix for every missing piece
+cp .env.example .env        # paste the key as ZOTERO_API_KEY= and the user ID as ZOTERO_LIBRARY_ID= (setup looks the ID up if you leave it empty)
+./setup.sh                  # health check with the fix for every missing piece; the data directory is auto-detected
 claude                      # or codex — then: /download <link>
 ```
 
-Needs Python 3.11+ (nothing to pip-install), `pdftotext` (poppler) or `pip install pypdf`, Zotero 7+ with sync on.
+Needs Python 3.11+ (nothing to pip-install) and `pdftotext` (poppler) or `pip install pypdf`.
 Optional: [Ollama](https://ollama.com) + `ollama pull qwen3.5:9b` (~6 GB) so a local model settles the borderline tags for
 free; without it the rules run alone and say so — set `ZC_LLM=agent` in `.env` to let the coding agent settle them instead,
 or `ZC_LLM=off` to keep the candidates for yourself ([how it decides](docs/classifier.md)).
