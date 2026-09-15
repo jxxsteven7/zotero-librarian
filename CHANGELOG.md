@@ -2,6 +2,8 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v0.12** (2026-09-15) — Kimi Code CLI dropped from the supported agents (never verified end to end); Claude Code and Codex
+  remain, both exercised live through the `download` skill.
 - **v0.11** (2026-09-15) — review before open-sourcing: `add` resolves the collection before creating the item (a missing
   collection no longer leaves a half-saved item), skips duplicates before the classifier runs, prints the whole abstract on a
   collection PAUSE; one text analysis per paper instead of two; the negative-context rule applies to every family (same eval

@@ -74,7 +74,7 @@ for t, col in pills:
     px += tw + 34
 text(x0, 482, "with the sentence that justifies each tag", f(SANS, 18), MUTED)
 d.line((X(x0), Y(524), X(500), Y(524)), fill=LINE, width=max(1, X(1)))
-text(x0, 540, "Claude Code  ·  Codex  ·  Kimi Code CLI", f(SANS_B, 18), SOFT)
+text(x0, 540, "Claude Code  ·  Codex", f(SANS_B, 18), SOFT)
 text(x0, 570, "Ubuntu · macOS · Windows  ·  Ollama  ·  MIT", f(SANS, 17), MUTED)
 
 # right: the whole window (menu bar dropped), then the item pane's tag block at actual size, boxed and connected

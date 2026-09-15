@@ -4,7 +4,6 @@
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-download-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/setup)
 [![Codex](https://img.shields.io/badge/Codex-download-000000?style=flat-square)](https://developers.openai.com/codex/cli/)
-[![Kimi Code CLI](https://img.shields.io/badge/Kimi_Code_CLI-download-1E6FFF?style=flat-square&logo=kimi&logoColor=white)](https://www.kimi.com/code)
 [![Ollama](https://img.shields.io/badge/Ollama-download-2B2B2B?style=flat-square&logo=ollama&logoColor=white)](https://ollama.com/download)<br>
 [![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org/download/)
 [![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#快速开始)
@@ -33,7 +32,7 @@
 git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian && cd ~/zotero-librarian
 cp .env.example .env        # 填 ZOTERO_API_KEY 和 ZOTERO_LIBRARY_ID（zotero.org/settings/keys）；数据目录自动探测
 ./setup.sh                  # 体检，每一项缺失都会给出修复方法
-claude                      # 或 codex / kimi，然后：/download <链接>
+claude                      # 或 codex，然后：/download <链接>
 ```
 
 需要 Python 3.11+（不用 pip 装任何东西）、`pdftotext`（poppler）或 `pip install pypdf`、开了同步的 Zotero 7+。
@@ -85,10 +84,9 @@ claude                      # 或 codex / kimi，然后：/download <链接>
 |---|---|---|
 | Claude Code | `CLAUDE.md` → `AGENTS.md`，`.claude/skills/` | `/download <链接>` |
 | Codex CLI | `AGENTS.md`，`.agents/skills/` | `$download <链接>`（要放开网络：`[sandbox_workspace_write] network_access = true`；Ubuntu 24.04+ 还要 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`，否则它的沙箱起不来） |
-| Kimi Code CLI | `AGENTS.md`，`.agents/skills/` | `/skill:download <链接>` |
 
 一份规则文件，一套 [Agent Skills](https://agentskills.io) 格式的 skills；`.claude/skills` 是逐字副本，`zl.py setup` 会核对。
-想在任意目录使用：`python3 zl.py install`（把启动器 `zl` 放到 PATH，并给三个 agent 装用户级 skills；`--remove` 撤销）。
+想在任意目录使用：`python3 zl.py install`（把启动器 `zl` 放到 PATH，并给两个 agent 装用户级 skills；`--remove` 撤销）。
 支持 Ubuntu、macOS、Windows（Windows 上写 `python zl.py ...`）。
 
 ## 它怎么判断
@@ -138,11 +136,10 @@ tests/  .github/workflows/ci.yml         合成论文上的单元测试；CI 在
   （[许可](https://api.semanticscholar.org/license)）、[OpenReview](https://openreview.net)、
   [Hugging Face daily papers](https://huggingface.co/papers)——元数据、会议、引用、发现。只以礼貌的频率访问；提供密钥的地方请用你自己的
   （`S2_API_KEY`）。感谢 arXiv 提供开放获取的互操作接口。
-- [Agent Skills](https://agentskills.io)（规范，Apache-2.0）——Codex、Kimi Code CLI 等读取的 `.agents/skills/` 格式；
-  各家在哪里找 skills 见 [Claude Code](https://code.claude.com/docs/en/skills)、[Codex](https://developers.openai.com/codex/skills)
-  和 [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) 的文档。
+- [Agent Skills](https://agentskills.io)（规范，Apache-2.0）——Codex 等读取的 `.agents/skills/` 格式；
+  各家在哪里找 skills 见 [Claude Code](https://code.claude.com/docs/en/skills) 和 [Codex](https://developers.openai.com/codex/skills) 的文档。
 - [Google 工程实践](https://google.github.io/eng-practices/)——`AGENTS.md` / `CONTRIBUTING.md` 里的 review 规则改编自
   *The standard of code review*（© Google，[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)）。
 - [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)（MIT）——把 agent 层写成多个 CLI 都能读的纯 Markdown skills，这是先例。
-- 徽章来自 [shields.io](https://shields.io)；图标来自 [Simple Icons](https://simpleicons.org)（CC0；商标归各自所有者）。Claude、Codex、Kimi、
+- 徽章来自 [shields.io](https://shields.io)；图标来自 [Simple Icons](https://simpleicons.org)（CC0；商标归各自所有者）。Claude、Codex、
   Zotero、Notion 和 Ollama 是各自所有者的商标；本项目与它们均无关联。

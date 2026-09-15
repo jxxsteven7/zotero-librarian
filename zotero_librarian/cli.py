@@ -38,7 +38,7 @@ Library
   dump [--table]           read-only snapshot -> cache/library_dump.json
   setup [--sync-skills] [--offline]   health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills /
                            agents); --offline = repository checks only (what CI runs; no Zotero, no network)
-  install [--remove]       use it from anywhere: launcher `zl` on PATH + user-level skills for Claude Code / Codex / Kimi
+  install [--remove]       use it from anywhere: launcher `zl` on PATH + user-level skills for Claude Code / Codex
   --version                print the version (CHANGELOG.md lists the changes)
 
 With ZC_LLM=agent (no local model) add / save / tidy pause with an ADJUDICATE block; answer it on the printed command with

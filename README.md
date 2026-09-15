@@ -4,7 +4,6 @@
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-download-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/setup)
 [![Codex](https://img.shields.io/badge/Codex-download-000000?style=flat-square)](https://developers.openai.com/codex/cli/)
-[![Kimi Code CLI](https://img.shields.io/badge/Kimi_Code_CLI-download-1E6FFF?style=flat-square&logo=kimi&logoColor=white)](https://www.kimi.com/code)
 [![Ollama](https://img.shields.io/badge/Ollama-download-2B2B2B?style=flat-square&logo=ollama&logoColor=white)](https://ollama.com/download)<br>
 [![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org/download/)
 [![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#quick-start)
@@ -35,7 +34,7 @@ read" in one command. Every tag comes with its evidence; the borderline ones are
 git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian && cd ~/zotero-librarian
 cp .env.example .env        # ZOTERO_API_KEY + ZOTERO_LIBRARY_ID (zotero.org/settings/keys); data dir is auto-detected
 ./setup.sh                  # health check with the fix for every missing piece
-claude                      # or codex / kimi — then: /download <link>
+claude                      # or codex — then: /download <link>
 ```
 
 Needs Python 3.11+ (nothing to pip-install), `pdftotext` (poppler) or `pip install pypdf`, Zotero 7+ with sync on.
@@ -89,11 +88,10 @@ mirror useful (Short Title = page title, URL = project page); the recipe is in [
 |---|---|---|
 | Claude Code | `CLAUDE.md` → `AGENTS.md`, `.claude/skills/` | `/download <link>` |
 | Codex CLI | `AGENTS.md`, `.agents/skills/` | `$download <link>` (allow network: `[sandbox_workspace_write] network_access = true`; Ubuntu 24.04+ also needs `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` for its sandbox) |
-| Kimi Code CLI | `AGENTS.md`, `.agents/skills/` | `/skill:download <link>` |
 
 One rule file, one set of skills in the [Agent Skills](https://agentskills.io) format; `.claude/skills` is a verbatim
 copy that `zl.py setup` checks. Use it from any directory with `python3 zl.py install` (launcher `zl` on PATH +
-user-level skills for all three agents; `--remove` undoes it). Ubuntu, macOS and Windows (`python zl.py ...`).
+user-level skills for both agents; `--remove` undoes it). Ubuntu, macOS and Windows (`python zl.py ...`).
 
 ## How it decides
 
@@ -149,13 +147,13 @@ Nothing here is bundled from another project; these are the things it talks to o
   ([license](https://api.semanticscholar.org/license)), [OpenReview](https://openreview.net),
   [Hugging Face daily papers](https://huggingface.co/papers) — metadata, venues, citations, discovery. Polite rates only;
   bring your own keys where they offer them (`S2_API_KEY`). Thank you, arXiv, for use of its open access interoperability.
-- [Agent Skills](https://agentskills.io) (specification, Apache-2.0) — the `.agents/skills/` format read by Codex,
-  Kimi Code CLI and others; [Claude Code](https://code.claude.com/docs/en/skills), [Codex](https://developers.openai.com/codex/skills)
-  and [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) documentation for where each one looks.
+- [Agent Skills](https://agentskills.io) (specification, Apache-2.0) — the `.agents/skills/` format read by Codex and
+  others; [Claude Code](https://code.claude.com/docs/en/skills) and [Codex](https://developers.openai.com/codex/skills)
+  documentation for where each one looks.
 - [Google engineering practices](https://google.github.io/eng-practices/) — the review rule in `AGENTS.md` /
   `CONTRIBUTING.md` is adapted from *The standard of code review* (© Google, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)).
 - [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) (MIT) — the precedent for keeping the agent
   layer as plain Markdown skills that several CLIs can read.
 - Badges by [shields.io](https://shields.io); logos from [Simple Icons](https://simpleicons.org) (CC0; the marks belong
-  to their owners). Claude, Codex, Kimi, Zotero, Notion and Ollama are trademarks of their respective owners; this
+  to their owners). Claude, Codex, Zotero, Notion and Ollama are trademarks of their respective owners; this
   project is not affiliated with any of them.

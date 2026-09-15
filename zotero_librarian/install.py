@@ -1,6 +1,6 @@
 """Global install: use the tool from any directory, in any agent.
 
-    python3 zl.py install            # launcher `zl` on PATH + user-level copies of the skills for Claude Code / Codex / Kimi
+    python3 zl.py install            # launcher `zl` on PATH + user-level copies of the skills for Claude Code / Codex
     python3 zl.py install --remove   # undo both
 
 Nothing is copied but the launcher and the four SKILL.md files: the code, taxonomy.toml, .env, cache and logs stay in this
@@ -14,7 +14,7 @@ from . import config
 
 ROOT, SRC = config.ROOT, config.SKILLS_SRC
 HOME = os.path.expanduser("~")
-# user-level skill directories: Claude Code reads ~/.claude/skills; Codex and Kimi read ~/.agents/skills (Kimi also ~/.claude/skills)
+# user-level skill directories: Claude Code reads ~/.claude/skills; Codex reads ~/.agents/skills
 USER_SKILL_DIRS = [os.path.join(HOME, ".claude", "skills"), os.path.join(HOME, ".agents", "skills")]
 MARK = "<!-- installed by zl.py install from "
 
@@ -78,5 +78,5 @@ def run(argv=()):
     p = write_launcher(); cmd = command_for_skills(p)
     print(f"launcher  : {p}" + ("" if cmd == "zl" else f"  (its directory is not on PATH — the skills use the full command instead; add it to PATH and re-run to get `zl`)"))
     for d in install_skills(cmd): print(f"skill     : {d}")
-    print(f"\nFrom any directory: `{cmd} add <link>` or, in an agent session, /download <link> (Claude Code), $download (Codex), /skill:download (Kimi).")
+    print(f"\nFrom any directory: `{cmd} add <link>` or, in an agent session, /download <link> (Claude Code) or $download (Codex).")
     print("Configuration stays in this checkout (.env, taxonomy.toml, cache/, logs/). Undo with `python3 zl.py install --remove`.")

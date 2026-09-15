@@ -17,7 +17,7 @@ from . import config                         # taxonomy / llm are imported insid
 from .http import UA_LOCAL
 
 SKILLS_SRC, SKILLS_MIRROR = config.SKILLS_SRC, config.SKILLS_MIRROR
-AGENTS = [("Claude Code", "claude", "/download <link>"), ("Codex", "codex", "$download <link>"), ("Kimi Code CLI", "kimi", "/skill:download <link>")]
+AGENTS = [("Claude Code", "claude", "/download <link>"), ("Codex", "codex", "$download <link>")]
 
 
 def stale_skills():
@@ -104,7 +104,7 @@ def run(argv=()):
     # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
     found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
     if found: report(True, "agents on PATH: " + "; ".join(f"{n} -> {s}" for n, s in found))
-    else: report(True, "no agent CLI on PATH (claude / codex / kimi) — install one, or point any agent that reads AGENTS.md at this directory", warn=True)
+    else: report(True, "no agent CLI on PATH (claude / codex) — install one, or point any agent that reads AGENTS.md at this directory", warn=True)
 
     print()
     if problems:

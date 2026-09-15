@@ -3,7 +3,7 @@
 Keeps a Zotero library organized: four collections, a controlled `family:value` tag vocabulary, `[YYYY-MMDD] [Venue] Title`
 titles, project page in the URL field. **The scripts judge; the agent runs them, relays their report and handles only what
 they mark for a human.** Tokens are the scarce resource: never read a PDF, grep a full text or re-derive a classification
-yourself. This file is read by every agent (Claude Code, Codex, Kimi Code CLI, ...; `CLAUDE.md` only imports it).
+yourself. This file is read by every agent (Claude Code, Codex, ...; `CLAUDE.md` only imports it).
 Reply in the user's language.
 
 ## Where things are
@@ -12,7 +12,7 @@ Reply in the user's language.
 zl.py                 the only entry point: python3 zl.py <command> (Windows: python); --help lists everything
 taxonomy.toml         collections, tag vocabulary with definitions, rules, venue abbreviations — the source of truth
 zotero_librarian/     the package (stdlib only): classify / llm / pipeline / connector / zapi / localdb / setup_check / install ...
-.agents/skills/       download · tidy · discover · refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
+.agents/skills/       download · tidy · discover · refs (Agent Skills format; Codex `$download`)
 .claude/skills/       verbatim copy for Claude Code (`/download`) — edit .agents/skills, then `zl.py setup --sync-skills`
 docs/                 first-run.md (existing library), classifier.md (how it decides), taxonomy.md (the file's reference), notero.md (Notion mirror)
 tests/  tools/        unittest on synthetic papers (CI, 3 platforms) · eval_classify.py (the library as ground truth)

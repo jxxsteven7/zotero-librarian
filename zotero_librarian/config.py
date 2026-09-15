@@ -26,7 +26,7 @@ CACHE = os.path.join(ROOT, "cache")
 DUMP = os.path.join(CACHE, "library_dump.json")
 LOG = os.path.join(ROOT, "logs", "zotero-organize.log.md")
 TAXONOMY_PATH = os.path.join(ROOT, "taxonomy.toml")
-SKILLS_SRC = os.path.join(ROOT, ".agents", "skills")           # the skills (Agent Skills format; Codex, Kimi and others read this)
+SKILLS_SRC = os.path.join(ROOT, ".agents", "skills")           # the skills (Agent Skills format; Codex and others read this)
 SKILLS_MIRROR = os.path.join(ROOT, ".claude", "skills")        # verbatim copy — the only place Claude Code looks
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"

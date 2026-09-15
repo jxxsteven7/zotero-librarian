@@ -12,7 +12,7 @@ labels: bug
 
 **Environment**
 - OS: Ubuntu / macOS / Windows (version)
-- Agent: Claude Code / Codex / Kimi Code CLI / none (version)
+- Agent: Claude Code / Codex / none (version)
 - Zotero version, sync type (Zotero storage / WebDAV)
 - `python3 zl.py setup` output:
 
