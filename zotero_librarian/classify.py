@@ -69,6 +69,8 @@ def score_tag(tag, title, abstract, body):
             head_hits += 1
             if len(ev) < 2: ev.append(("abstract" if m.start() > len(title) else "title", snip(head, m)))
         ms = list(rx.finditer(body))
+        if tag.startswith("embod:") and tx.NEGATIVE_CONTEXT:                    # hardware named in related work ("prior work uses parallel-jaw grippers")
+            ms = [m for m in ms if not tx.NEGATIVE_CONTEXT.search(body[max(0, m.start() - 60):m.start()])]
         body_hits += len(ms) * w
         if ms and len(ev) < 2: ev.append((f"body x{len(ms)}", snip(body, ms[0])))
     return dict(head=head_hits, body=body_hits, ev=ev)

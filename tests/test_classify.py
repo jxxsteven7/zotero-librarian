@@ -43,6 +43,14 @@ class Rules(unittest.TestCase):
         self.assertIn("tech:flow-matching", sg["maybe"])                 # a baseline mention in the body: candidate, not assigned
         self.assertEqual(sg["flags"], [])
 
+    def test_hardware_named_in_related_work_is_a_candidate_not_a_tag(self):
+        a = "We introduce a tactile-driven imitation learning system for cable tracing on a Tesollo DG-5F dexterous hand."
+        body = a + ("\n\nRelated work. Most prior work uses parallel-jaw grippers [5]; existing approaches with parallel-jaw grippers "
+                    "rely on explicit state estimation. Prior parallel-jaw gripper systems close a feedback loop on cable pose.\n\n"
+                    "Experiments. The hand pinches the cable between thumb and index finger; a parallel-jaw gripper holds the far end.")
+        sg = classify.suggest("Touch2Trace", a, body)
+        self.assertIn("embod:dex-hand", sg["sure"]); self.assertNotIn("embod:gripper", sg["sure"]); self.assertIn("embod:gripper", sg["maybe"])
+
     def test_humanoid_paper(self):
         a = ("We propose a whole-body controller for humanoid robots. Reinforcement learning in simulation with sim-to-real transfer "
              "enables robust locomotion and motion tracking on a Unitree G1 humanoid robot.")
