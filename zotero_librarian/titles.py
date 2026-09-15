@@ -41,7 +41,7 @@ def strip_prefix(t):
 
 
 def short_title(name):
-    """Zotero's Short Title = the paper's short name (Notero uses it as the Notion page title):
+    """Zotero's Short Title = the paper's short name (mirrors such as a Notion database use it as the page title):
     user nickname [ALOHA/ACT] > the name before the colon > the title without prefixes."""
     name = re.sub(r"^(\s*\[[^\]]*\]\s*){2}", "", name or "").strip()          # drop [date] [venue]
     g = re.match(r"^\[([^\]]+)\]\s*", name)

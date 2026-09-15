@@ -39,7 +39,7 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     check_tags(tags)
     title = make_title(m, name=name, venue=venue, date_=date_)
     item = dict(m["item"], id=slug, title=title, shortTitle=short or short_title(title))
-    item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL field = project page when we have one (that is what the Notion column shows)
+    item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL field = project page when we have one
     pdf = os.path.join(INBOX, slug + ".pdf")
     if not ping(): raise RuntimeError("Zotero desktop is not running (connector port 23119 unreachable)")
     sid = hashlib.sha1(f"{slug}{time.time()}".encode()).hexdigest()[:8]

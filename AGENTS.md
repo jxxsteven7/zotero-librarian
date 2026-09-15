@@ -1,7 +1,7 @@
 # zotero-librarian — rules for the agent working in this repository
 
 This repository keeps a Zotero library organized: four collections, a controlled `family:value` tag vocabulary,
-`[YYYY-MMDD] [Venue] Title` titles, project pages in the URL field, and a Notion mirror. The scripts do the judging;
+`[YYYY-MMDD] [Venue] Title` titles, project pages in the URL field. The scripts do the judging;
 the agent (Claude Code, Codex, Kimi Code CLI, ... — this file is read by all of them) runs them, relays their reports,
 and handles only what they mark for a human. Tokens are the scarce resource: anything a script or the local model can
 do is done there; never read a PDF, grep a full text or re-derive a classification yourself. Reply in the user's language.
@@ -22,7 +22,8 @@ zotero_librarian/              package, standard library only, Ubuntu / macOS / 
 .agents/skills/             the skills download / tidy / discover / refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
 .claude/skills/             identical copy for Claude Code (`/download`); edit .agents/skills and run `zl.py setup --sync-skills`
 proposals/proposal.py       approval-mode batch data (RETAG / UNTAG / UNCOLLECT / P)
-docs/first-run.md docs/classifier.md docs/notero.md   organizing an existing library; how classification works; Notion mirror (Notero)
+docs/first-run.md docs/classifier.md   organizing an existing library; how classification works
+docs/notero.md              optional integration: mirroring the library to Notion with the Notero plugin (nothing in the code depends on it)
 CONTRIBUTING.md CHANGELOG.md   issue / PR procedure; one line per version
 logs/zotero-organize.log.md audit log, appended by the scripts (local to the machine, not in git)
 tools/                      eval_classify.py (measure the classifier on the library), fix_pdf_names.js (Zotero Run JavaScript)
@@ -95,8 +96,8 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
   printed command — a few hundred tokens per paper), or nobody (`off`). The candidates asked about are the only ones the answer may contain.
 - Collections are created only by `zl.py tidy --create-collections` (the taxonomy's own, on a first run) — never by the agent on its own.
 - Values outside `taxonomy.toml` are never invented. A new value needs the user's approval and is then added to `taxonomy.toml`
-  (definition + patterns); no bare tags except the ones listed in `keep_bare_tags` (`notion` is written by the Notero plugin — keep it,
-  and keep the `Notion` link attachment under each item).
+  (definition + patterns); no bare tags except the ones listed in `keep_bare_tags` — those are written by plugins (e.g. Notero's `notion`):
+  never remove them, nor the link attachments such plugins keep under an item.
 - Every item carries exactly one status on the read axis (`to-read-first > to-read > skimmed > read`); new items get `to-read`. Status
   never moves backwards without the user's approval; the presentation / reproduction axes are the user's.
 - Existing user-set titles, nicknames in a third bracket (`[ALOHA/ACT]`) and markers (✅ ❗) are never changed.
@@ -129,4 +130,4 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
 - Changing the classifier: edit `taxonomy.toml`, run `python3 tools/eval_classify.py` (rules) and `--llm` (with the local model) and keep
   precision from dropping; the numbers are in the README.
 
-Classifier details: `docs/classifier.md`. Notion mirror: `docs/notero.md`.
+Classifier details: `docs/classifier.md`. Optional Notion mirror: `docs/notero.md`.

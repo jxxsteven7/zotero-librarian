@@ -78,11 +78,10 @@ def verify(key, wait=150, quiet=False):
     d = it["data"]; kids = [(c["data"].get("title"), c["data"].get("linkMode")) for c in zapi.children(env, key)]
     synced, ver = localdb.sync_state(key)
     info = dict(version=it["version"], title=d["title"], tags=sorted(t["tag"] for t in d["tags"]), collections=[names.get(c, c) for c in d["collections"]],
-                url=d.get("url", ""), short=d.get("shortTitle", ""), children=kids, local_synced=synced, local_version=ver,
-                notion="Notion" in [k[0] for k in kids])
+                url=d.get("url", ""), short=d.get("shortTitle", ""), children=kids, local_synced=synced, local_version=ver)
     if not quiet:
         print(f"  sync      : ok server v{info['version']} | collections {info['collections']} | tags {info['tags']}")
-        print(f"              URL {info['url']} | short {info['short']} | children {[k[0] for k in kids]} | local synced={synced}" + ("" if info["notion"] else " | Notion attachment not there yet (Notero usually pushes within a minute)"))
+        print(f"              URL {info['url']} | short {info['short']} | children {[k[0] for k in kids]} | local synced={synced}")
     return info
 
 
@@ -94,7 +93,7 @@ def report_row(got, sg, info, note_extra=""):
     if note_extra: notes.append(note_extra)
     sync = "ok" if info else "unconfirmed"
     return (f"| `{got['key']}` | {got['title']} | {got['collection']}" + (f" + {got['also']}" if got.get("also") else "") +
-            f" | {', '.join(t for t in got['tags_written'] if t != 'notion')} | {'yes' if got['pdf_ok'] else 'no'} | sync {sync}. " + ("; ".join(notes) or "—") + " |")
+            f" | {', '.join(t for t in got['tags_written'] if t not in tx.KEEP_BARE_TAGS)} | {'yes' if got['pdf_ok'] else 'no'} | sync {sync}. " + ("; ".join(notes) or "—") + " |")
 
 
 def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150):
