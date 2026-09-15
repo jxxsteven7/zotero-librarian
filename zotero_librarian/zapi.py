@@ -5,6 +5,7 @@ import json, sys, time, urllib.error, urllib.request
 from datetime import date
 
 from .config import append_log, load_env
+from .taxonomy import check_tags
 
 API = "https://api.zotero.org"
 
@@ -35,9 +36,13 @@ def env_or_die():
 
 
 def remote_collections(env):
-    """{name: key}, {key: data}"""
-    st, _, js = req(env, "GET", "/collections", params="?limit=100")
-    if st != 200: sys.exit(f"GET collections -> {st} {js}")
+    """{name: key}, {key: data} — every collection of the library (paged by 100)."""
+    js = []
+    while True:
+        st, _, page = req(env, "GET", "/collections", params=f"?limit=100&start={len(js)}")
+        if st != 200: sys.exit(f"GET collections -> {st} {page}")
+        js += page
+        if len(page) < 100: break
     return {c["data"]["name"]: c["key"] for c in js}, {c["key"]: c["data"] for c in js}
 
 
@@ -93,7 +98,6 @@ def add_collection(key, name, wait=180):
 
 def add_tags(key, tags):
     """Add tags to an item (remote tags + new ones, never removes). Used after discussing candidate tags with the user. Logged."""
-    from .taxonomy import check_tags
     tags = [t.strip() for t in tags if t.strip()]
     check_tags(tags)
     env = env_or_die()

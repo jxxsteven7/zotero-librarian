@@ -7,7 +7,7 @@ Layout (ROOT = the parent of this package):
   cache/library_dump.json        library snapshot from `zl.py dump`, not in git
   logs/zotero-organize.log.md    audit log of every write (local, not in git)
 
-.env keys (KEY=VALUE per line; a file holding just the bare API key also works):
+.env keys (KEY=VALUE per line):
   ZOTERO_API_KEY     Zotero Web API key (zotero.org/settings/keys; personal library read/write + file access)
   ZOTERO_LIBRARY_ID  your user library id (zotero.org/settings/keys shows it)
   ZOTERO_DATA_DIR    Zotero data directory; if unset, read from Zotero's prefs.js (extensions.zotero.dataDir),
@@ -15,7 +15,7 @@ Layout (ROOT = the parent of this package):
   PDFTOTEXT          path to the pdftotext executable; if unset, searched on PATH and common install locations
   ZC_LLM / ZC_LLM_MODEL / ZC_LLM_URL / ZC_LLM_KEY   local model for classification (see llm.py)
 """
-import glob, os, re, shutil, sys
+import atexit, glob, os, re, shutil, sqlite3, sys, tempfile
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,13 +54,11 @@ def append_log(*lines):
 def load_env():
     env = {}
     if os.path.exists(ENV_PATH):
-        with open(ENV_PATH, encoding="utf-8") as f: raw = f.read()
-        for line in raw.splitlines():
+        with open(ENV_PATH, encoding="utf-8") as f: lines = f.read().splitlines()
+        for line in lines:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1); env[k.strip()] = v.strip().strip('"').strip("'")
-        if "ZOTERO_API_KEY" not in env and re.fullmatch(r"[A-Za-z0-9]{20,40}", raw.strip()):
-            env["ZOTERO_API_KEY"] = raw.strip()   # a bare key on its own is accepted
     env.setdefault("ZOTERO_LIBRARY_ID", "")
     return env
 
@@ -102,7 +100,6 @@ def connect_ro(path=None):
     and a normal read-only open hits Zotero's exclusive lock. So when a WAL exists, copy main file + WAL to a temporary
     directory and open the copy — SQLite applies the WAL itself. The copy is retried until mtime/size are unchanged
     before and after, i.e. a consistent snapshot."""
-    import shutil, sqlite3, tempfile, atexit
     path = path or DB
     wal = path + "-wal"
     if not (os.path.exists(wal) and os.path.getsize(wal) > 0):

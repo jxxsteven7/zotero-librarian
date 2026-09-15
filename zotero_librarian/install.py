@@ -26,16 +26,17 @@ def launcher_path():
 
 
 def on_path(p):
-    return os.path.dirname(p) in [os.path.normcase(os.path.normpath(x)) for x in os.environ.get("PATH", "").split(os.pathsep)] or \
-           os.path.normcase(os.path.dirname(p)) in [os.path.normcase(os.path.normpath(x)) for x in os.environ.get("PATH", "").split(os.pathsep)]
+    return os.path.normcase(os.path.dirname(p)) in [os.path.normcase(os.path.normpath(x)) for x in os.environ.get("PATH", "").split(os.pathsep)]
 
 
 def write_launcher():
     p = launcher_path(); os.makedirs(os.path.dirname(p), exist_ok=True)
     py, entry = sys.executable, os.path.join(ROOT, "zl.py")
-    if config.IS_WIN: open(p, "w", encoding="utf-8", newline="\r\n").write(f'@echo off\r\n"{py}" "{entry}" %*\r\n')
+    if config.IS_WIN:
+        with open(p, "w", encoding="utf-8", newline="\r\n") as f: f.write(f'@echo off\r\n"{py}" "{entry}" %*\r\n')
     else:
-        open(p, "w", encoding="utf-8").write(f'#!/bin/sh\nexec "{py}" "{entry}" "$@"\n'); os.chmod(p, 0o755)
+        with open(p, "w", encoding="utf-8") as f: f.write(f'#!/bin/sh\nexec "{py}" "{entry}" "$@"\n')
+        os.chmod(p, 0o755)
     return p
 
 
@@ -50,11 +51,12 @@ def install_skills(cmd):
     for name in sorted(os.listdir(SRC)):
         src = os.path.join(SRC, name, "SKILL.md")
         if not os.path.isfile(src): continue
-        text = open(src, encoding="utf-8").read().replace("python3 zl.py", cmd)
+        with open(src, encoding="utf-8") as f: text = f.read().replace("python3 zl.py", cmd)
         text = text.replace("\n---\n", f"\n---\n{MARK}{ROOT} -->\n", 1)    # after the frontmatter; lets --remove recognise our copies
         for d in USER_SKILL_DIRS:
             os.makedirs(os.path.join(d, name), exist_ok=True)
-            open(os.path.join(d, name, "SKILL.md"), "w", encoding="utf-8").write(text); done.append(os.path.join(d, name))
+            with open(os.path.join(d, name, "SKILL.md"), "w", encoding="utf-8") as f: f.write(text)
+            done.append(os.path.join(d, name))
     return done
 
 
@@ -64,7 +66,9 @@ def remove():
     for d in USER_SKILL_DIRS:
         for name in (sorted(os.listdir(d)) if os.path.isdir(d) else []):
             f = os.path.join(d, name, "SKILL.md")
-            if os.path.isfile(f) and MARK in open(f, encoding="utf-8").read(): shutil.rmtree(os.path.join(d, name)); print(f"removed {os.path.join(d, name)}")
+            if not os.path.isfile(f): continue
+            with open(f, encoding="utf-8") as h: ours = MARK in h.read()
+            if ours: shutil.rmtree(os.path.join(d, name)); print(f"removed {os.path.join(d, name)}")
         for x in (d, os.path.dirname(d)):                                        # directories we may have created, if now empty
             if os.path.isdir(x) and not os.listdir(x): os.rmdir(x)
 

@@ -42,18 +42,19 @@ def available(cfg=None):
     cfg = cfg or settings()
     if cfg["kind"] == "off": return False, "ZC_LLM=off"
     if cfg["kind"] == "agent": return False, "ZC_LLM=agent (the coding agent adjudicates the candidates; costs tokens)"
+    if cfg["kind"] not in ("ollama", "openai"): return False, f"ZC_LLM={cfg['kind']!r} is not one of ollama / openai / agent / off"
     try:
         if cfg["kind"] == "ollama":
             tags = json.loads(urllib.request.urlopen(cfg["url"] + "/api/tags", timeout=5).read())
             names = [m["name"] for m in tags.get("models", [])]
             if cfg["model"] not in names and cfg["model"] + ":latest" not in names:
-                return False, f"Ollama is up but model {cfg['model']!r} is not pulled (have: {', '.join(names) or 'none'}); run `ollama pull {cfg['model']}`"
+                return False, f"Ollama runs but {cfg['model']!r} is not pulled (have: {', '.join(names) or 'none'}): `ollama pull {cfg['model']}`"
             return True, f"ollama {cfg['model']} at {cfg['url']}"
         hdr = {"Authorization": "Bearer " + cfg["key"]} if cfg["key"] else {}
         urllib.request.urlopen(urllib.request.Request(cfg["url"] + "/v1/models", headers=hdr), timeout=5).read()
         return True, f"openai-compatible {cfg['model']} at {cfg['url']}"
-    except Exception as e:
-        return False, f"{cfg['kind']} at {cfg['url']} not reachable ({e})"
+    except Exception:
+        return False, f"{'Ollama' if cfg['kind'] == 'ollama' else 'the model server'} is not running at {cfg['url']}"
 
 
 def _chat(cfg, system, user):
@@ -118,10 +119,9 @@ def merge(c, llm, policy="adjudicate", collection=None):
     for u in llm.get("uncertain", []):
         m = re.match(r"\s*([a-z]+:[a-z0-9.\-]+)\s*[:\-—]?\s*(.*)", u)
         if m: unsure[m.group(1)] = m.group(2).strip()
-    adjudicate = set(tx.LLM.get("adjudicate_families", ["embod", "tech", "base"]))
     for t in picked - rule_sure:
         fam = t.split(":")[0]
-        if t in maybe and fam in adjudicate and (fam != "base" or S.get(t, {}).get("ctx", 0) >= 2):   # borderline evidence + model agrees -> assign
+        if t in maybe and fam in tx.ADJUDICATE and (fam != "base" or S.get(t, {}).get("ctx", 0) >= 2):   # borderline evidence + model agrees -> assign
             fam_tags[fam].append(t); maybe.pop(t)
         elif t in maybe:
             maybe[t] = maybe[t] + " — the model agrees it applies"                                # family the model may not decide: stays a candidate
@@ -135,7 +135,7 @@ def merge(c, llm, policy="adjudicate", collection=None):
         else: kept.append(t + (f" ({unsure[t]})" if unsure.get(t) else ""))
     for t, why in unsure.items():
         if t in valid and t not in {x for ts in fam_tags.values() for x in ts} and t not in maybe: maybe[t] = "model unsure: " + why
-    c2 = dict(c, fam_tags=fam_tags, maybe=maybe, flags=flags, rule_sure=rule_sure, lock_collection=collection)
+    c2 = dict(c, fam_tags=fam_tags, maybe=maybe, flags=flags, lock_collection=collection)
     classify.apply_relations(c2["fam_tags"], c2["maybe"], S, c2["title"], c2["head_txt"], c2["body"])
     sg = classify.finish(c2)
     kept = [k for k in kept if k.split(" ")[0] in sg["sure"]]                                      # finish() may have stripped some (benchmark / survey rules)
@@ -153,7 +153,7 @@ def merge(c, llm, policy="adjudicate", collection=None):
 def promotable(c, sg_rules, policy="adjudicate"):
     """Candidates that would be assigned if the adjudicator confirmed them (same merge() as a model answer, so the
     family list, the base-context requirement and the collection's strip rules all apply). Empty = nothing to ask."""
-    cand = [t for t in c["maybe"] if t.split(":")[0] in set(tx.LLM.get("adjudicate_families", ["embod", "tech", "base"]))]
+    cand = [t for t in c["maybe"] if t.split(":")[0] in tx.ADJUDICATE]
     if not cand: return []
     trial = merge(c, {"tags": list(sg_rules["sure"]) + cand, "collection": sg_rules["collection"]}, policy, sg_rules["collection"])
     return [t for t in trial["sure"] if t not in sg_rules["sure"]]
@@ -197,7 +197,7 @@ def suggest(title, abstract, text, has_pdf=True, cfg=None, cache=None, policy="a
     `confirm`: ZC_LLM=agent only — the agent's answer (list of confirmed tags, [] for none). None = not answered yet:
     the result then carries `agent_request` (tags, text) and the pipeline pauses when it is non-empty."""
     c = classify.analyze(title, abstract, text, has_pdf)
-    sg_rules = classify.suggest(title, abstract, text, has_pdf)
+    sg_rules = classify.finish_rules(c)
     cfg = cfg or settings()
     if cfg["kind"] == "agent":
         if confirm is not None: return agent_merge(c, sg_rules, confirm, policy)
@@ -205,11 +205,11 @@ def suggest(title, abstract, text, has_pdf=True, cfg=None, cache=None, policy="a
         return sg_rules
     out = None
     if cache and os.path.exists(cache):
-        out = json.load(open(cache, encoding="utf-8"))
+        with open(cache, encoding="utf-8") as f: out = json.load(f)
     else:
         ok, msg = available(cfg)
         if not ok:
-            if cfg["kind"] != "off": sg_rules["flags"].append(f"no LLM ({msg}); rules only")
+            if cfg["kind"] != "off": sg_rules["flags"].append(f"rules only: {msg} (start it, or set ZC_LLM=agent / off in .env)")
             return sg_rules
         try:
             out = ask(title, abstract, c["body"], sg_rules, cfg)
@@ -217,7 +217,7 @@ def suggest(title, abstract, text, has_pdf=True, cfg=None, cache=None, policy="a
             sg_rules["flags"].append(f"LLM call failed ({e}); rules only"); return sg_rules
         if cache:
             os.makedirs(os.path.dirname(cache), exist_ok=True)
-            json.dump(out, open(cache, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            with open(cache, "w", encoding="utf-8") as f: json.dump(out, f, ensure_ascii=False, indent=1)
     return merge(c, out, policy, sg_rules["collection"])
 
 

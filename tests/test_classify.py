@@ -2,7 +2,7 @@
     python3 -m unittest discover -s tests -v"""
 import contextlib, io, unittest
 
-from zotero_librarian import pipeline, classify, llm, taxonomy as tx
+from zotero_librarian import classify, llm, taxonomy as tx
 from zotero_librarian.classify import _rx
 
 ABSTRACT = ("We present a vision-language-action policy for dexterous manipulation. Experiments on a real Franka Panda arm with a "
@@ -93,6 +93,18 @@ class Rules(unittest.TestCase):
         self.assertEqual((sg["collection"], sg["also"]), ("Dex-Manipulation", tx.SURVEY_HOME))
         self.assertEqual(sg["sure"], ["type:survey", "method:vla"])
 
+    def test_analysis_context_survives_the_rule_verdict(self):
+        """llm.merge starts from the pre-relation context, so finish_rules() must not mutate what analyze() returned."""
+        c = classify.analyze("DexVLA", ABSTRACT, BODY); before = (dict(c["fam_tags"]), dict(c["maybe"]))
+        sg = classify.finish_rules(c)
+        self.assertEqual((c["fam_tags"], c["maybe"]), before); self.assertNotIn("method:policy-learning", sg["sure"])   # excluded by vla in the verdict only
+
+    def test_no_model_server_means_rules_plus_one_flag(self):
+        dead = dict(kind="ollama", model="x", url="http://127.0.0.1:1", key="", timeout=1)
+        sg = llm.suggest("DexVLA", ABSTRACT, BODY, cfg=dead)
+        self.assertEqual(sg["sure"], classify.suggest("DexVLA", ABSTRACT, BODY)["sure"])
+        self.assertEqual([f for f in sg["flags"] if f.startswith("rules only")], ["rules only: Ollama is not running at http://127.0.0.1:1 (start it, or set ZC_LLM=agent / off in .env)"])
+
     def test_check_tags_rejects_values_outside_the_vocabulary(self):
         with contextlib.redirect_stdout(io.StringIO()):                     # check_tags prints its warnings
             self.assertEqual(tx.check_tags(["method:vla", "embod:dex-hand", "status:to-read"]), [])
@@ -102,9 +114,9 @@ class Rules(unittest.TestCase):
 class Status(unittest.TestCase):
     def test_tidy_adds_the_default_status_once(self):
         """tidy writes through the Web API, so it must add status:to-read itself (the connector does it for add)."""
-        self.assertIn("status:" + tx.DEFAULT_STATUS, pipeline.with_status(["embod:dex-hand"]))
-        self.assertEqual(pipeline.with_status(["embod:dex-hand"], have={"status:read", "notion"}), ["embod:dex-hand"])
-        self.assertEqual(pipeline.with_status(["status:to-read-first", "method:rl"]).count("status:to-read-first"), 1)
+        self.assertIn("status:" + tx.DEFAULT_STATUS, tx.with_status(["embod:dex-hand"]))
+        self.assertEqual(tx.with_status(["embod:dex-hand"], have={"status:read", "notion"}), ["embod:dex-hand"])
+        self.assertEqual(tx.with_status(["status:to-read-first", "method:rl"]).count("status:to-read-first"), 1)
 
 
 class AgentAdjudication(unittest.TestCase):

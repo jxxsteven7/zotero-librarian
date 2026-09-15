@@ -1,7 +1,13 @@
 # Changelog
 
-One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
+One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v0.11** (2026-09-15) — review before open-sourcing: `add` resolves the collection before creating the item (a missing
+  collection no longer leaves a half-saved item), skips duplicates before the classifier runs, prints the whole abstract on a
+  collection PAUSE; one text analysis per paper instead of two; the negative-context rule applies to every family (same eval
+  numbers); `remote_collections` pages past 100; `recheck` reads the live library (no `dump` first); a broken `taxonomy.toml`
+  is reported by `setup` instead of a traceback; a missing model server is one short flag; no family names hard-coded in the
+  code (`[llm] adjudicate_families` unset = all); dead code and unclosed files removed. docs/taxonomy.md: the file's reference.
 - **v0.10** (2026-09-15) — `tidy` now writes the default reading status (it never did through the Web API path, so a tidied
   item stayed "untidy"), prints what it wrote and the sync check, and its table once. tidy demo GIF; all four demos in
   README "What it does", the library screenshot on top.

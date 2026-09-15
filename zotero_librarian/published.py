@@ -83,4 +83,4 @@ def lookup_published(m, text=None, s2=None):
         ab, ev = venue_from_page(u)
         if ab: m["venue"], m["venue_src"] = ab, "project page " + ev; return
         if ev: notes.append(ev)
-    if notes: m["venue_src"] = "default（" + "；".join(notes) + "）"
+    if notes: m["venue_src"] = "default (" + "; ".join(notes) + ")"

@@ -24,10 +24,12 @@ only = set(sys.argv[sys.argv.index("--only") + 1].split(",")) if "--only" in sys
 
 def text_of(r):
     p = os.path.join(TXT, r["key"] + ".txt")
-    if os.path.exists(p): return open(p, encoding="utf-8").read()
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f: return f.read()
     if not r["pdfs"]: return ""
     t = pdf_text(os.path.join(DATA_DIR, r["pdfs"][0]))
-    open(p, "w", encoding="utf-8").write(t); return t
+    with open(p, "w", encoding="utf-8") as f: f.write(t)
+    return t
 
 
 tp = collections.Counter(); fp = collections.Counter(); fn = collections.Counter(); maybe_hit = collections.Counter(); maybe_all = collections.Counter()

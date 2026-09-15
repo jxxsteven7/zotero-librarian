@@ -14,7 +14,7 @@ on day one is exactly what it will keep doing.
   (that definition is what the adjudicating model reads), the regex patterns and thresholds behind every tag, the
   venue abbreviations, and the library settings (`default_status`, `title_prefix`). The shipped file is the author's
   robot-learning taxonomy; replace the collections and values with your field's. The code knows nothing about the
-  domain. How the rules and thresholds work: [classifier.md](classifier.md).
+  domain. How the rules and thresholds work: [classifier.md](classifier.md); every key of the file: [taxonomy.md](taxonomy.md).
 - **`AGENTS.md`** is the policy for the agent: what may be written, through which path, what needs the human.
 
 Nothing else decides anything. If a paper lands in the wrong place, the fix is a pattern or a threshold in

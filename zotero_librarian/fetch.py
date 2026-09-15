@@ -14,13 +14,13 @@ from .titles import make_title, norm_title, short_title
 def load(slug):
     p = os.path.join(INBOX, slug + ".json")
     if not os.path.exists(p): raise RuntimeError(f"{slug} is not in the inbox; fetch it first")
-    return json.load(open(p, encoding="utf-8"))
+    with open(p, encoding="utf-8") as f: return json.load(f)
 
 
 def list_inbox():
     out = []
     for f in sorted(os.listdir(INBOX)) if os.path.isdir(INBOX) else []:
-        if f.endswith(".json"): out.append(json.load(open(os.path.join(INBOX, f), encoding="utf-8")))
+        if f.endswith(".json"): out.append(load(f[:-5]))
     return out
 
 

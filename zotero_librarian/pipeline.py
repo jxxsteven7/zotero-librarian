@@ -22,7 +22,8 @@ COLS = ["key", "title", "collection", "tags", "PDF", "notes"]
 
 def _text(slug):
     p = os.path.join(INBOX, slug + ".txt")
-    return open(p, encoding="utf-8").read() if os.path.exists(p) else ""
+    if not os.path.exists(p): return ""
+    with open(p, encoding="utf-8") as f: return f.read()
 
 
 def suggest_for(m, text=None, confirm=None):
@@ -59,19 +60,16 @@ def decide(sg, collection=None, tags=None, drop=None, also=None, first=False):
     return coll, (also or sg["also"]), tags
 
 
-def with_status(tags, have=()):
-    """Every item carries exactly one reading status: add the default unless the item or the new tags already have one."""
-    if any(t.startswith("status:") for t in list(have) + list(tags)): return tags
-    return tx.sort_tags(list(tags) + ["status:" + tx.DEFAULT_STATUS])
-
-
 def paused(sg): return any(f.startswith("BOUNDARY") for f in sg["flags"])
 
 
-def pause_cmd(head, sg, coll, also, need_coll, need_adj):
-    """The PAUSE message + the exact command that finishes the item once the human / agent has decided."""
+def pause_cmd(head, sg, coll, also, need_coll, need_adj, abstract=""):
+    """The PAUSE message + the exact command that finishes the item once the human / agent has decided. An undecided
+    collection is decided from the abstract, so the whole abstract is printed here (the card shows only its start)."""
     why = []
-    if need_coll: why.append("collection undecided: " + "; ".join(f for f in sg["flags"] if "BOUNDARY" in f))
+    if need_coll:
+        why.append("collection undecided: " + "; ".join(f for f in sg["flags"] if "BOUNDARY" in f))
+        if abstract: print(f"  abstract  : {abstract}")
     if need_adj: why.append("adjudication pending: " + ", ".join(sg["agent_request"][0]))
     cmd = head + (f' --collection "{coll}"' if need_coll else "") + (f' --also "{also}"' if need_coll and also else "") + \
           (f"  --confirm none   # or --confirm {','.join(sg['agent_request'][0])} (only the ones you confirm)" if need_adj else "")
@@ -137,16 +135,17 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
         try: m = fetch.fetch_one(link)
         except Exception as e:
             print(f"=== {link}\n  x {e}\n"); rows.append(["—", link, "—", "—", "—", f"x {str(e)[:120]}"]); n["failed"] += 1; continue
-        brief(m); sg = suggest_for(m, confirm=confirm); judgement(sg)
-        if m.get("duplicate") and not force:
+        brief(m)
+        if m.get("duplicate") and not force:                                  # skipped before the classifier runs: nothing to judge
             d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
             rows.append([f"`{d['key']}`", d["title"], "—", "—", "—", "duplicate, already in the library, skipped"]); n["duplicate"] += 1; continue
+        sg = suggest_for(m, confirm=confirm); judgement(sg)
         coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
         if dry_run:
             print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
-            why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
+            why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj, m.get("abstract", ""))
             rows.append(["PAUSE", m["proposed_title"], coll + ("?" if need_coll else ""), ", ".join(tags_), "yes" if m.get("pdf_src") else "no", why]); n["paused"] += 1; continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
         rows.append(row); n["saved"] += 1
@@ -227,11 +226,8 @@ def plan_item(r, confirm=None):
     if proj and same(proj) != same(cur_url): fields["url"] = proj
     elif not cur_url and m: fields["url"] = m["url"]
     if not r.get("shortTitle"): fields["shortTitle"] = short_title(title)
-    coll, also, tags = decide(sg)
-    have = set(r["tags"]); add_tags = [t for t in with_status(tags, have) if t not in have]   # the connector adds the status for `add`; here we must
-    colls = [c for c in ([coll] + ([also] if also else [])) if c not in r["collections"]]
-    return dict(key=r["key"], old_title=r["title"], title=new_title, fields=fields, tags=add_tags, collections=colls, sg=sg, src=src,
-                notes=notes, abstract=abstract, has_text=bool(text))
+    have = set(r["tags"]); add_tags = [t for t in tx.with_status(decide(sg)[2], have) if t not in have]   # the connector adds the status for `add`; here we must
+    return dict(key=r["key"], old_title=r["title"], title=new_title, fields=fields, tags=add_tags, sg=sg, src=src, notes=notes, abstract=abstract)
 
 
 def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=None, create_collections=False):
@@ -264,10 +260,10 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         coll = collection or sg["collection"]
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
-            why = pause_cmd(f"python3 zl.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj)
+            why = pause_cmd(f"python3 zl.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj, p["abstract"])
             out.append(["PAUSE", p["title"], coll + ("?" if need_coll else ""), ", ".join(p["tags"]), "yes" if r["pdfs"] else "no", why]); continue
         if not write:
-            print(f"  [dry-run] would write: {coll} | +{', '.join(p['tags'])} | fields {list(p['fields'])}\n"); continue
+            print(f"  [dry-run] would write: {coll} | tags +{', '.join(p['tags']) or 'none'} | fields {', '.join(p['fields']) or 'none'}\n"); continue
         st, it = zapi.get_item(env, p["key"])
         if st != 200: print(f"  x not on the server ({st}); sync Zotero first\n"); continue
         d = it["data"]; patch = {}
@@ -278,12 +274,13 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         if want_c: patch["collections"] = d["collections"] + want_c
         have = {t["tag"] for t in d["tags"]}; new_tags = [t for t in p["tags"] if t not in have]
         if new_tags: patch["tags"] = d["tags"] + [{"tag": t, "type": 0} for t in new_tags]
-        if patch: zapi.patch(env, p["key"], it["version"], patch)
-        done = ["+" + ", ".join(new_tags)] if new_tags else []
-        if [k for k in patch if k not in ("tags", "collections")]: done.append("fields " + ", ".join(k for k in patch if k not in ("tags", "collections")))
-        if want_c: done.append("collection " + ", ".join(c for c in [coll, sg["also"]] if c))
+        changed = [k for k in patch if k not in ("tags", "collections")]
+        done = (["+" + ", ".join(new_tags)] if new_tags else []) + (["fields " + ", ".join(changed)] if changed else []) + \
+               (["collection " + ", ".join(c for c in [coll, sg["also"]] if c)] if want_c else [])
+        if patch:
+            zapi.patch(env, p["key"], it["version"], patch)
+            zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | +collection: {', '.join(c for c in [coll, sg['also']] if c)} | +tags: {', '.join(new_tags)} | fields: {', '.join(changed)} | {p['src']}")
         print("  written   : " + (" | ".join(done) or "nothing — already as planned") + " <- Web API")
-        zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | +collection: {', '.join(c for c in [coll, sg['also']] if c)} | +tags: {', '.join(new_tags)} | fields: {', '.join(k for k in patch if k not in ('tags', 'collections'))} | {p['src']}")
         info = verify(p["key"], wait=wait, expect=dict(collection=coll, tags=p["tags"], url=p["fields"].get("url"), short=p["fields"].get("shortTitle"))) if wait else None
         got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
         row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))

@@ -9,7 +9,7 @@ from . import fetch, localdb, zapi
 from .config import INBOX
 from .http import http, UA_LOCAL
 from .titles import make_title, short_title
-from .taxonomy import COLLECTIONS, DEFAULT_STATUS, check_tags, sort_tags
+from .taxonomy import COLLECTIONS, check_tags, sort_tags, with_status
 
 CONNECTOR = "http://127.0.0.1:23119"
 
@@ -34,27 +34,29 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     m = fetch.load(slug)
     if m.get("duplicate") and not force: raise RuntimeError(f"already in the library: {m['duplicate']['key']} | {m['duplicate']['title']} (use --force to add anyway)")
     if collection not in COLLECTIONS or (also and also not in COLLECTIONS): raise RuntimeError(f"collection must be one of {COLLECTIONS}")
-    tags = [t.strip() for t in tags if t.strip()]
-    if not any(t.startswith("status:") for t in tags): tags.append("status:" + DEFAULT_STATUS)
+    tags = with_status([t.strip() for t in tags if t.strip()])
     check_tags(tags)
     title = make_title(m, name=name, venue=venue, date_=date_)
     item = dict(m["item"], id=slug, title=title, shortTitle=short or short_title(title))
     item["url"] = url or m.get("project_url") or m["item"].get("url") or ""      # URL field = project page when we have one
     pdf = os.path.join(INBOX, slug + ".pdf")
     if not ping(): raise RuntimeError("Zotero desktop is not running (connector port 23119 unreachable)")
+    target = f"C{localdb.collection_id(collection)}"                              # resolved before anything is created: a missing collection must not leave a half-saved item
     sid = hashlib.sha1(f"{slug}{time.time()}".encode()).hexdigest()[:8]
     st, body = connector("/connector/saveItems", {"sessionID": sid, "uri": m["url"], "items": [item]})
     if st != 201: raise RuntimeError(f"saveItems failed {st}: {body[:300]}")
-    st, body = connector("/connector/updateSession", {"sessionID": sid, "target": f"C{localdb.collection_id(collection)}", "tags": tags})
+    st, body = connector("/connector/updateSession", {"sessionID": sid, "target": target, "tags": tags})
     if st != 200: raise RuntimeError(f"updateSession failed {st}: {body[:300]} (item created, but tags / collection were not applied)")
     pdf_ok = False
     if os.path.exists(pdf):
         meta = json.dumps({"sessionID": sid, "parentItemID": slug, "title": "Full Text PDF", "url": m.get("pdf_src") or m["url"]})
-        st, body = connector("/connector/saveAttachment?sessionID=" + sid, open(pdf, "rb").read(), headers={"X-Metadata": meta, "Content-Type": "application/pdf"})
+        with open(pdf, "rb") as f: data = f.read()
+        st, body = connector("/connector/saveAttachment?sessionID=" + sid, data, headers={"X-Metadata": meta, "Content-Type": "application/pdf"})
         pdf_ok = st == 201
         if not pdf_ok: print(f"  ! saveAttachment failed {st}: {body[:300]}")
-    time.sleep(1)
-    got = localdb.item_by_title(title)
+    for _ in range(5):                                                            # the client commits the new item within a moment; read it back by title
+        time.sleep(1); got = localdb.item_by_title(title)
+        if got: break
     if not got: raise RuntimeError("connector returned 201 but the title is not in the local database — check Zotero")
     missing = [f for f in got["files"] if not os.path.exists(f)]
     print(f"  saved     : {got['key']} <- Zotero desktop | {' + '.join(got['collections'])} | {', '.join(sort_tags(got['tags']))}")

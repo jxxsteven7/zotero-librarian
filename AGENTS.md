@@ -14,7 +14,7 @@ taxonomy.toml         collections, tag vocabulary with definitions, rules, venue
 zotero_librarian/     the package (stdlib only): classify / llm / pipeline / connector / zapi / localdb / setup_check / install ...
 .agents/skills/       download · tidy · discover · refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
 .claude/skills/       verbatim copy for Claude Code (`/download`) — edit .agents/skills, then `zl.py setup --sync-skills`
-docs/                 first-run.md (existing library), classifier.md (how it decides), notero.md (optional Notion mirror)
+docs/                 first-run.md (existing library), classifier.md (how it decides), taxonomy.md (the file's reference), notero.md (Notion mirror)
 tests/  tools/        unittest on synthetic papers (CI, 3 platforms) · eval_classify.py (the library as ground truth)
 logs/                 audit log written by the scripts (local, not in git)
 ```
@@ -25,7 +25,7 @@ logs/                 audit log written by the scripts (local, not in git)
 | organize items added by hand (`tidy` skill) | `zl.py tidy [--dry-run] [--limit N] [--create-collections]` — every item without a status tag |
 | edit one item | `zl.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why ...` · `collect <key> <collection>` · `set <key> url=...` |
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |
-| re-verify arXiv items | `zl.py dump && zl.py recheck [--dates] [--search]`, then `--write` after approval |
+| re-verify arXiv items | `zl.py recheck [--dates] [--search]`, then `--write` after approval |
 | new machine / before pushing | `./setup.sh` (= `zl.py setup`; `install` puts `zl` on PATH) · `zl.py setup --offline` + `python3 -m unittest discover -s tests` + `python3 tools/check_commits.py` |
 
 ## Access rules (hard constraints)
@@ -90,4 +90,4 @@ part before the colon > title. PDF file names carry no prefix (Zotero rename tem
   printed abstract, `--confirm` for an ADJUDICATE block). No grepping, no polling loops, no hand-written logs.
 - `tidy` skill: `zl.py tidy` on items without a status tag — same pauses, same report. `discover` / `refs` only print tables.
 - Changing the classifier: edit `taxonomy.toml`, add a synthetic case to `tests/`, run `python3 tools/eval_classify.py` (and
-  `--llm`) and keep precision from dropping. Details: `docs/classifier.md`.
+  `--llm`) and keep precision from dropping. Details: `docs/classifier.md`; every key of the file: `docs/taxonomy.md`.

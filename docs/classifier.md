@@ -18,6 +18,8 @@ sure = 12.5      # weighted body hits needed to assign without an abstract menti
 maybe = 2.5      # ... to list as a candidate
 ```
 
+Every key the file accepts, and the scoring behind them, is in [taxonomy.md](taxonomy.md).
+
 Then measure: `python3 tools/eval_classify.py` scores the classifier against the items you already tagged by hand
 (precision / recall per family, the most over- and under-assigned tags, `--errors` for every disagreement). On the
 author's library of 138 reviewed papers (2026-09-15, v0.6 classifier):

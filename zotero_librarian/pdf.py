@@ -11,7 +11,8 @@ def download_pdf(url, dest):
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
     if not b.startswith(b"%PDF"): return False, f"not a PDF (content-type={h.get('Content-Type')})"
-    open(dest, "wb").write(b); return True, url
+    with open(dest, "wb") as f: f.write(b)
+    return True, url
 
 _PDF_WARNED = False
 
@@ -89,7 +90,7 @@ def project_urls(m, text=None, pdf=None):
             ctx[u] = 3
     if pdf and os.path.exists(pdf):
         try:
-            raw = open(pdf, "rb").read(3_000_000)
+            with open(pdf, "rb") as f: raw = f.read(3_000_000)
             cands += [x.decode("latin-1").rstrip(".,;:)") for x in re.findall(rb"/URI\s*\((https?://[^)]{6,200})\)", raw)]
         except OSError: pass
     out = {}

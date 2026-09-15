@@ -15,12 +15,13 @@ default_status = "to-read"
 title_prefix = true                   # rewrite titles as "[YYYY-MMDD] [Venue] Title"; false = leave every title exactly as it is
 keep_bare_tags = ["notion"]           # un-prefixed tags that plugins add and the scripts must leave alone (e.g. Notero's "notion"); hidden in reports
 negative_context = "(unlike|without|instead of|rather than|compared (to|with)|not (require|rely|need)|beyond|alternative to|in contrast to|limitations? of|prior|existing|previous|conventional|traditional|alternatives? (such as|like)|categorized|strategies|approaches|methods|such as)\\b[^.]{0,50}$"
-# ^ a method mentioned in the abstract right after one of these words is context, not the paper's own method
+# ^ a pattern hit right after one of these words (within 60 characters, in the abstract or the body) is context, not the paper's own work
 
 [llm]
-# Which families the local model may promote from "candidate" to "assigned" (it never overrides the rules' sure tags or the
-# collection). Measured on this library with qwen3.5:9b: letting the model decide method / modality lowered precision
-# (it tags "imitation learning" and "vision" far too readily); embod / tech / base gained recall at little cost.
+# Which families the adjudicator (local model or agent) may promote from "candidate" to "assigned"; it never overrides the
+# rules' sure tags or the collection. Unset = every family. Measured on this library with qwen3.5:9b: letting the model
+# decide method / modality lowered precision (it tags "imitation learning" and "vision" far too readily); embod / tech / base
+# gained recall at little cost.
 adjudicate_families = ["embod", "tech", "base"]
 
 # ---------------------------------------------------------------------------------------------------------------------

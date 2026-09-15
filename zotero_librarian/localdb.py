@@ -50,7 +50,7 @@ def dump(table=False):
 
 def load(refresh=False):
     if refresh or not os.path.exists(DUMP): return dump()
-    return json.load(open(DUMP, encoding="utf-8"))
+    with open(DUMP, encoding="utf-8") as f: return json.load(f)
 
 
 def collection_id(name):

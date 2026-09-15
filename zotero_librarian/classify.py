@@ -1,6 +1,6 @@
 """Rule-based classifier: turns taxonomy.toml patterns into evidence-backed collection / tag suggestions.
 
-    suggest(title, abstract, text) -> dict(collection, also, sure, maybe, flags, evidence, scores)
+    suggest(title, abstract, text) -> dict(collection, also, sure, maybe, flags, evidence)
 
 Three output tiers:
   sure  — meets the "substantively used" bar; `zl.py add` assigns these directly
@@ -11,7 +11,7 @@ baselines mention everything once or twice). The reference list is cut first, ot
 Thresholds were tuned on the library's own reviewed items (tools/eval_classify.py); re-run it after editing the rules.
 The LLM classifier (llm.py) consumes the evidence this module extracts, so keep the patterns broad and the thresholds strict.
 """
-import re, shutil
+import copy, re, shutil
 
 from . import taxonomy as tx
 
@@ -77,11 +77,11 @@ def score_tag(tag, title, abstract, body):
         rx = _rx(pat)
         for m in rx.finditer(head):
             if w < 1: continue                                                  # weak words in the abstract are not the paper speaking
-            if tag.split(":")[0] in ("method", "modality") and tx.NEGATIVE_CONTEXT and tx.NEGATIVE_CONTEXT.search(head[max(0, m.start() - 60):m.start()]): continue   # "without depth or point-cloud inputs"
+            if tx.NEGATIVE_CONTEXT and tx.NEGATIVE_CONTEXT.search(head[max(0, m.start() - 60):m.start()]): continue   # "without depth or point-cloud inputs"
             head_hits += 1
             if len(ev) < 2: ev.append(("abstract" if m.start() > len(title) else "title", snip(head, m)))
         ms = list(rx.finditer(body))
-        if tag.startswith("embod:") and tx.NEGATIVE_CONTEXT:                    # hardware named in related work ("prior work uses parallel-jaw grippers")
+        if tx.NEGATIVE_CONTEXT:                                                 # named in related work ("prior work uses parallel-jaw grippers")
             ms = [m for m in ms if not tx.NEGATIVE_CONTEXT.search(body[max(0, m.start() - 60):m.start()])]
         body_hits += len(ms) * w
         if ms and len(ev) < 2: ev.append((f"body x{len(ms)}", snip(body, ms[0])))
@@ -102,8 +102,13 @@ def _collection_score(c, head_txt, body):
 
 
 def suggest(title, abstract, text, has_pdf=True):
-    """Rules only. The LLM path (llm.py) reuses analyze() -> apply_relations() -> finish()."""
-    c = analyze(title, abstract, text, has_pdf)
+    """Rules only: analyze() -> apply_relations() -> finish(). The LLM path (llm.py) starts from the same analyze() context."""
+    return finish_rules(analyze(title, abstract, text, has_pdf))
+
+
+def finish_rules(c):
+    """The rules' verdict from an analyze() context, which is left untouched (llm.merge needs the pre-relation state)."""
+    c = copy.deepcopy(c)
     apply_relations(c["fam_tags"], c["maybe"], c["S"], c["title"], c["head_txt"], c["body"])
     return finish(c)
 
@@ -139,9 +144,7 @@ def analyze(title, abstract, text, has_pdf=True):
                 else: maybe[tag] = "model named, but no fine-tuning / frozen context (architecturally similar or a baseline: no base tag)"
                 continue
             lv = _level(tag, s)
-            if lv == "sure" and s["head"] and r.get("head", True) is False:   # head hit but the family needs contribution context (teleop)
-                lv = "maybe"
-            if s["head"] and r.get("head", True) is False:
+            if s["head"] and r.get("head", True) is False:                    # a head hit alone is not enough for this tag (teleop): needs contribution context
                 if (r.get("title_requires") and re.search(r["title_requires"], title, re.I)) or (r.get("head_requires") and re.search(r["head_requires"], head_txt, re.I)):
                     lv = "sure"
                 elif r.get("title_maybe") and re.search(r["title_maybe"], title, re.I):
@@ -234,17 +237,16 @@ def finish(c):
         if r.get("strip"): maybe = {t: w for t, w in maybe.items() if t.split(":")[0] not in r["strip"]}; flags.append(f"{ttag.split(':')[1]}: only type + {'/'.join(r.get('head_only', []))} named in the title/abstract are tagged")
     if "type:survey" in types and coll != tx.SURVEY_HOME and tx.SURVEY_HOME: also = tx.SURVEY_HOME
     if not winner.get("status_only") and not winner.get("default") and "embod" in fam_tags and not fam_tags["embod"]: flags.append("no embodiment found — embod left empty (uncertain)")
-    if not winner.get("status_only") and not fam_tags["method"]: flags.append("no method found — left empty" + (" (classic ML papers often carry none)" if winner.get("default") else ""))
+    if not winner.get("status_only") and "method" in fam_tags and not fam_tags["method"]: flags.append("no method found — left empty" + (" (classic ML papers often carry none)" if winner.get("default") else ""))
     if not has_pdf: flags.append("no full text — judged from the abstract only; tags may be missing, add them with `zl.py tag` once the PDF is in")
 
     sure = types + [t for f in tx.FAMILIES for t in fam_tags[f]]
     for t in sure: evidence[t] = S[t]["ev"][:2] if t in S else []
     for t in maybe: evidence[t] = S[t]["ev"][:1] if t in S else []
-    return dict(collection=coll, also=also, sure=sure, maybe=maybe, flags=flags, evidence=evidence,
-                scores={t: dict(head=s["head"], body=s["body"], ctx=s.get("ctx", 0)) for t, s in S.items()}, rule_sure=list(c["rule_sure"]) if "rule_sure" in c else sure)
+    return dict(collection=coll, also=also, sure=sure, maybe=maybe, flags=flags, evidence=evidence)
 
 
-def evidence_pack(sg, S_all=None, limit=2, width=160):
+def evidence_pack(sg, limit=2, width=160):
     """Evidence snippets for every tag with any hit (sure or not) — the grounded context handed to the LLM."""
     out = []
     for t, evs in sg["evidence"].items():

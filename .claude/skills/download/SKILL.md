@@ -52,7 +52,7 @@ instead of the links. Ask which papers if none were given. On Windows use `pytho
 ## Related commands
 
 - Look before saving: `python3 zl.py fetch <link>` (full card) -> `python3 zl.py suggest <slug>` -> `python3 zl.py save <slug> ...`.
-- Re-verify existing arXiv items: `python3 zl.py dump && python3 zl.py recheck [--dates] [--search]`; `--write` after approval.
+- Re-verify existing arXiv items: `python3 zl.py recheck [--dates] [--search]`; `--write` after approval.
 
 ## Don't
 

@@ -13,7 +13,7 @@ CI runs it on Ubuntu / macOS / Windows for every pull request, and a contributor
 """
 import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 
-from . import config, llm
+from . import config                         # taxonomy / llm are imported inside the checks: a broken taxonomy.toml must be reported, not crash the import
 from .http import UA_LOCAL
 
 SKILLS_SRC, SKILLS_MIRROR = config.SKILLS_SRC, config.SKILLS_MIRROR
@@ -35,7 +35,7 @@ def skill_problems():
     for name in sorted(os.listdir(SKILLS_SRC)) if os.path.isdir(SKILLS_SRC) else []:
         f = os.path.join(SKILLS_SRC, name, "SKILL.md")
         if not os.path.isfile(f): continue
-        head = open(f, encoding="utf-8").read().split("\n---\n", 1)[0]
+        with open(f, encoding="utf-8") as h: head = h.read().split("\n---\n", 1)[0]
         if not head.startswith("---"): out.append(f"{name}: no frontmatter"); continue
         if f"name: {name}" not in head: out.append(f"{name}: frontmatter name must be {name!r}")
         if "description:" not in head: out.append(f"{name}: no description")
@@ -81,6 +81,7 @@ def run(argv=()):
         report(True, f"taxonomy.toml: {len(tx.COLLECTIONS)} collections, {sum(len(v) for v in tx.VOCAB.values())} tag values, {len(tx.VENUES)} venues")
     except Exception as e:
         report(False, f"taxonomy.toml failed to load: {e}", "fix the TOML syntax (python -c 'import tomllib; tomllib.load(open(\"taxonomy.toml\",\"rb\"))')")
+        sys.exit(f"\nnothing else can be checked without the taxonomy; fix it and run `{PY} zl.py setup` again")
 
     # 5. pdftotext / pypdf
     if config.PDFTOTEXT:
@@ -182,6 +183,7 @@ def service_checks(env, report):
             report(False, f"Web API unreachable: {e}", "network problem, see above")
 
     # 9. who adjudicates the borderline tags
+    from . import llm
     cfg = llm.settings(); ok, msg = llm.available(cfg)
     if cfg["kind"] == "off": report(True, "adjudicator: none (ZC_LLM=off) — rules only, borderline tags are listed as candidates", warn=True)
     elif cfg["kind"] == "agent": report(True, "adjudicator: the coding agent (ZC_LLM=agent) — no local model, costs a few hundred tokens per paper", warn=True)

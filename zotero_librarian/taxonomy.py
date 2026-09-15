@@ -28,11 +28,12 @@ VOCAB = {f: (set(v["values"]) if isinstance(v.get("values"), list) else set(v.ge
 # tag -> rule dict (patterns, weak, sure, maybe, head, ...) for the families the classifier scores
 RULES = {}
 for _fam, _spec in FAMILY_RULES.items():
-    if _fam in ("status",) or not isinstance(_spec.get("values"), dict): continue
+    if _fam == "status" or not isinstance(_spec.get("values"), dict): continue
     for _val, _r in _spec["values"].items():
         RULES[f"{_fam}:{_val}"] = dict(_r, family=_fam, value=_val, description=_r.get("description", ""))
 
 LLM = T.get("llm", {})
+ADJUDICATE = set(LLM.get("adjudicate_families", FAMILIES))   # families where the adjudicator may promote a candidate; default: all
 VENUES = T.get("venues", [])
 VENUE_MISC = T.get("venues_misc", {})
 
@@ -50,10 +51,18 @@ def check_tags(tags):
     return warns
 
 
+_ORDER = {f: i for i, f in enumerate(FAMILY_RULES)}
+
+
 def sort_tags(tags):
     """Family order as in taxonomy.toml, status last."""
-    order = {f: i for i, f in enumerate(list(FAMILY_RULES))}
-    return sorted(set(tags), key=lambda t: (order.get(t.split(":")[0], 99), t))
+    return sorted(set(tags), key=lambda t: (_ORDER.get(t.split(":")[0], 99), t))
+
+
+def with_status(tags, have=()):
+    """Every item carries exactly one reading status: add the default unless the item or the new tags already have one."""
+    if any(t.startswith("status:") for t in list(have) + list(tags)): return list(tags)
+    return sort_tags(list(tags) + ["status:" + DEFAULT_STATUS])
 
 
 def policy_text():

@@ -16,10 +16,10 @@ def recheck(write=False, only=None, dates=False, search=False):
     """[arXiv] titles: look for the published venue (arXiv comment -> PDF first page -> Semantic Scholar -> Crossref -> project page);
     --dates: also check that the title date is the v1 submission date; --search: for items without an arXiv link / watermark,
     search arXiv by title for an earlier preprint (a journal paper with an earlier preprint takes the preprint's v1 date; 3 s each).
-    Run `zl.py dump` first. Lists only; --write changes titles through the Web API."""
+    Lists only; --write changes titles through the Web API."""
     from .taxonomy import TITLE_PREFIX
     if write and not TITLE_PREFIX: print("[library] title_prefix = false: titles are never rewritten; listing only"); write = False
-    items = localdb.load()
+    items = localdb.load(refresh=True)
     cands = []
     for it in items:
         if only and it["key"] not in only: continue
@@ -66,12 +66,11 @@ def recheck(write=False, only=None, dates=False, search=False):
     if not write or not hits: return
     env = zapi.env_or_die(); done = []
     for key, old, new, why in hits:
-        st, h, it = zapi.req(env, "GET", f"/items/{key}")
+        st, it = zapi.get_item(env, key)
         if st != 200: print(f"  x {key} GET {st}"); continue
-        if it["data"]["title"] != old: print(f"  x {key} server title differs from the dump, skipped: {it['data']['title'][:60]}"); continue
-        st, h, body = zapi.req(env, "PATCH", f"/items/{key}", {"title": new, "version": it["version"]})
-        print(f"  {'ok' if st in (200, 204) else 'x ' + str(st)} {key} {old[:40]!r} -> {new[:60]!r}")
-        if st in (200, 204): done.append((key, old, new, why))
+        if it["data"]["title"] != old: print(f"  x {key} server title differs from the local copy, skipped: {it['data']['title'][:60]}"); continue
+        try: zapi.patch(env, key, it["version"], {"title": new}); print(f"  ok {key} {old[:40]!r} -> {new[:60]!r}"); done.append((key, old, new, why))
+        except RuntimeError as e: print(f"  x {e}")
     if done:
         zapi.log(f"## {date.today()} — recheck", "### Applied",
                  *[f"- {key} | {old[:60]} -> {new[:70]} | {why[:110]}" for key, old, new, why in done])

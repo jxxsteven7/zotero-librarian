@@ -99,7 +99,7 @@ def run(days=7, cats=("cs.RO",), query=None, tags=(), require_all=False, sources
         hit = [t for t in want if t in got]
         if want and (not hit or (require_all and len(hit) < len(want))): continue
         rows.append((len(hit), len(got), p.get("upvotes", 0), p, got, sg["collection"]))
-    rows.sort(key=lambda r: (-r[0], -r[1], -r[2], r[3]["date"]), reverse=False)
+    rows.sort(key=lambda r: (-r[0], -r[1], -r[2], r[3]["date"]))
     print(f"{len(cands)} candidates from {', '.join(sources)} ({', '.join(cats)}, last {days} days); {len(rows)} after filters"
           + (f"; wanted tags: {', '.join(want)}" if want else "") + (f"; query /{query}/" if query else ""))
     link = (lambda i: i) if table.HUMAN else (lambda i: f"[{i}](https://arxiv.org/abs/{i})")

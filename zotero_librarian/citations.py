@@ -1,4 +1,4 @@
-"""cite — the citation neighbourhood of a paper via Semantic Scholar, cross-referenced with the library.
+"""refs — the citation neighbourhood of a paper via Semantic Scholar, cross-referenced with the library.
 
     zl.py refs <key | arXiv id | DOI | link> [--top 15]     references + citations of one paper; which are already in the library
     zl.py refs --library                                    citation links *between* library papers (reading order, hubs)
@@ -21,14 +21,17 @@ S2DIR = os.path.join(CACHE, "s2")
 def _get(path, params=""):
     os.makedirs(S2DIR, exist_ok=True)
     cache = os.path.join(S2DIR, re.sub(r"[^\w.-]+", "_", path + params)[:150] + ".json")
-    if os.path.exists(cache): return json.load(open(cache, encoding="utf-8"))
+    if os.path.exists(cache):
+        with open(cache, encoding="utf-8") as f: return json.load(f)
     hdr = {"User-Agent": UA_LOCAL}
     key = load_env().get("S2_API_KEY")
     if key: hdr["x-api-key"] = key
     for attempt in range(6):
         try:
             r = urllib.request.urlopen(urllib.request.Request(API + path + params, headers=hdr), timeout=60)
-            js = json.loads(r.read().decode()); json.dump(js, open(cache, "w", encoding="utf-8")); return js
+            js = json.loads(r.read().decode())
+            with open(cache, "w", encoding="utf-8") as f: json.dump(js, f)
+            return js
         except urllib.error.HTTPError as e:
             if e.code == 404: return None
             if e.code != 429 or attempt == 5: raise
@@ -86,8 +89,8 @@ def one(ident, top=15):
     cites = [x["citingPaper"] for x in cites if x.get("citingPaper") and x["citingPaper"].get("title")]
     print(f"=== {me['title']} ({me.get('year')}, {me.get('venue') or 'no venue'}, cited {me.get('citationCount', 0)} times)  [{sid}]")
     for name, items, key in (("REFERENCES", refs, "in"), ("CITED BY", cites, "out")):
-        inlib = [(p, _match(p, idx)) for p in items]; inlib = [(p, r) for p, r in inlib if r]
-        others = sorted([p for p in items if not _match(p, idx)], key=lambda p: -(p.get("citationCount") or 0))
+        matched = [(p, _match(p, idx)) for p in items]
+        inlib = [(p, r) for p, r in matched if r]; others = sorted([p for p, r in matched if not r], key=lambda p: -(p.get("citationCount") or 0))
         print(f"\n{name}: {len(items)} total, {len(inlib)} already in the library")
         for p, r in sorted(inlib, key=lambda pr: pr[0].get("year") or 0):
             print(f"  in library  `{r['key']}` {r['title'][:80]}")
@@ -102,7 +105,7 @@ def one(ident, top=15):
 
 def library(top=20):
     """Citation links between library papers: who cites whom, most-cited-within-library."""
-    lib = [r for r in localdb.load() if s2_id_for(r)]; idx = _index(lib)
+    lib = [r for r in localdb.load(refresh=True) if s2_id_for(r)]; idx = _index(lib)
     edges = []; n = 0
     for r in lib:
         sid = s2_id_for(r)
@@ -124,5 +127,5 @@ def library(top=20):
     print(f"\nPapers that build on the most library papers:")
     for k, s in sorted(citing.items(), key=lambda kv: -len(kv[1]))[:top]:
         print(f"  {len(s):>3}  `{k}` {by_key[k]['title'][:80]}  <- cites " + ", ".join(sorted(s)[:8]))
-    json.dump(edges, open(os.path.join(CACHE, "library_citations.json"), "w"))
+    with open(os.path.join(CACHE, "library_citations.json"), "w", encoding="utf-8") as f: json.dump(edges, f)
     return edges

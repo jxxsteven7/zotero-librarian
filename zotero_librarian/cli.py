@@ -72,8 +72,11 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help", "help"): print(USAGE); return
     if argv[0] in ("--version", "-V", "version"): print(f"{NAME} {__version__}"); return
-    cmd, args = argv[0], argv[1:]
+    try: run(argv[0], argv[1:])
+    except IndexError: sys.exit(f"zl.py {argv[0]}: missing argument — see `python3 zl.py --help`")
 
+
+def run(cmd, args):
     if cmd == "add":
         from . import pipeline
         ap = argparse.ArgumentParser(prog="zl.py add"); ap.add_argument("links", nargs="*"); _add_save_opts(ap); ap.add_argument("--dry-run", action="store_true")

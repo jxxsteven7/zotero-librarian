@@ -37,7 +37,9 @@ claude                      # or codex / kimi — then: /download <link>
 ```
 
 Needs Python 3.11+ (nothing to pip-install), `pdftotext` (poppler) or `pip install pypdf`, Zotero 7+ with sync on.
-Optional: [Ollama](https://ollama.com) + `ollama pull qwen3.5:9b` for free local adjudication (else `ZC_LLM=agent`).
+Optional: [Ollama](https://ollama.com) + `ollama pull qwen3.5:9b` (~6 GB) so a local model settles the borderline tags for
+free; without it the rules run alone and say so — set `ZC_LLM=agent` in `.env` to let the coding agent settle them instead,
+or `ZC_LLM=off` to keep the candidates for yourself ([how it decides](docs/classifier.md)).
 
 **Library already full and messy?** `zl.py tidy` organizes everything that has no status tag yet — on a first run,
 the whole library: `--dry-run --limit 20` to see the plan, then `--create-collections` to run it. What it files by is
@@ -97,7 +99,8 @@ Rules from `taxonomy.toml` extract evidence and assign what clears the threshold
 OpenAI-compatible server, or the agent itself (`ZC_LLM`) — settles the candidates in `embod` / `tech` / `base`; it never
 overrides a rule or the collection. On the author's 138 hand-tagged papers: rules 0.90 precision / 0.77 recall,
 rules + qwen3.5:9b 0.88 / 0.83, 136 / 138 collections. Edit the taxonomy for your field, measure with
-`tools/eval_classify.py`. Details, all numbers and the config: [docs/classifier.md](docs/classifier.md).
+`tools/eval_classify.py`. Details, all numbers and the config: [docs/classifier.md](docs/classifier.md); every key of the
+file, with the scoring it drives: [docs/taxonomy.md](docs/taxonomy.md).
 
 The shipped `taxonomy.toml` is robot learning — the maintainer's field, kept small and measured against a real library.
 The code knows nothing about robots: another field is the same file with other collections, values and venues. Send
@@ -109,7 +112,7 @@ yours as a PR (`taxonomies/<field>.toml`, with your eval numbers) rather than wi
 zl.py  taxonomy.toml  AGENTS.md          entry point · your collections, tags, rules, venues · the agent's rules (CLAUDE.md imports it)
 zotero_librarian/                        fetch / classify / llm / pipeline / connector / zapi / ... (stdlib only)
 .agents/skills/  .claude/skills/         download · tidy · discover · refs  (source · verbatim copy)
-docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md · eval_classify.py, check_commits.py, fix_pdf_names.js · one line per version
+docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, taxonomy.md, notero.md · eval_classify.py, check_commits.py, fix_pdf_names.js · one line per version
 tests/  .github/workflows/ci.yml         unit tests on synthetic papers; CI runs them + `zl.py setup --offline` on Ubuntu, macOS, Windows
 .env  cache/  inbox/  logs/              per machine, git-ignored
 ```
