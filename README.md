@@ -86,8 +86,8 @@ user-level skills for all three agents; `--remove` undoes it). Ubuntu, macOS and
 
 Rules from `taxonomy.toml` extract evidence and assign what clears the thresholds; an adjudicator — Ollama, an
 OpenAI-compatible server, or the agent itself (`ZC_LLM`) — settles the candidates in `embod` / `tech` / `base`; it never
-overrides a rule or the collection. On the author's 129 hand-tagged papers: rules 0.89 precision / 0.75 recall,
-rules + qwen3.5:9b 0.87 / 0.81, 127 / 129 collections. Edit the taxonomy for your field, measure with
+overrides a rule or the collection. On the author's 138 hand-tagged papers: rules 0.90 precision / 0.77 recall,
+rules + qwen3.5:9b 0.88 / 0.83, 136 / 138 collections. Edit the taxonomy for your field, measure with
 `tools/eval_classify.py`. Details, all numbers and the config: [docs/classifier.md](docs/classifier.md).
 
 The shipped `taxonomy.toml` is robot learning — the maintainer's field, kept small and measured against a real library.

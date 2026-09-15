@@ -20,14 +20,14 @@ maybe = 2.5      # ... to list as a candidate
 
 Then measure: `python3 tools/eval_classify.py` scores the classifier against the items you already tagged by hand
 (precision / recall per family, the most over- and under-assigned tags, `--errors` for every disagreement). On the
-author's library of 129 reviewed papers:
+author's library of 138 reviewed papers (2026-09-15, v0.6 classifier):
 
 | classifier | collection accuracy | tag precision | tag recall |
 |---|---|---|---|
-| rules only | 127 / 129 | 0.89 | 0.75 |
-| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 127 / 129 | 0.87 | 0.81 |
-| rules + local LLM adjudicating (qwen3.5:27b) | 127 / 129 | 0.88 | 0.80 |
-| rules + a perfect adjudicator (ceiling for `ZC_LLM=agent`) | 127 / 129 | 0.91 | 0.82 |
+| rules only | 136 / 138 | 0.90 | 0.77 |
+| rules + local LLM adjudicating (qwen3.5:9b, default policy) | 135 / 137 | 0.88 | 0.83 |
+| rules + local LLM adjudicating (qwen3.5:27b) — measured on 129 papers before v0.6 | 127 / 129 | 0.88 | 0.80 |
+| rules + a perfect adjudicator (ceiling for `ZC_LLM=agent`) — same 129 | 127 / 129 | 0.91 | 0.82 |
 | qwen3.5:9b alone (no rules) | 116 / 129 | 0.64 | 0.77 |
 | qwen3.5:27b alone (no rules) | 121 / 129 | 0.81 | 0.83 |
 
