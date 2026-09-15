@@ -58,14 +58,13 @@ if you want your titles left alone). Step by step: [docs/first-run.md](docs/firs
 | `/refs` · `zl.py refs <paper>` | References and citations (Semantic Scholar) split into "have" / "missing"; `--library` maps citations among your own papers. |
 | `zl.py recheck` · `tag` · `untag` · `set` | Re-verify venues and dates; single-item edits. |
 
-<details><summary><code>zl.py discover</code> — what appeared on arXiv this week that matches my tags</summary>
+`/discover` — what appeared on arXiv in the last days that matches your tags; papers already in the library are left out:
 
 ![zl.py discover](docs/demo-discover.gif)
-</details>
-<details><summary><code>zl.py refs</code> — what a paper builds on and who builds on it, split by what the library already has</summary>
+
+`/refs` — what a paper builds on and who builds on it, split into what the library has and what it is missing:
 
 ![zl.py refs](docs/demo-refs.gif)
-</details>
 
 Conventions: titles `[YYYY-MMDD] [Venue] Title` (v1 date, venue abbreviation, `[arXiv]` until accepted); URL field =
 project page; tags `family:value` from `taxonomy.toml`, one reading status per item; PDFs saved by Zotero itself so
