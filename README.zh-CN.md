@@ -96,6 +96,30 @@ claude                      # 或 codex，然后：/download <链接>
 想在任意目录使用：`python3 zl.py install`（把启动器 `zl` 放到 PATH，并给两个 agent 装用户级 skills；`--remove` 撤销）。
 支持 Ubuntu、macOS、Windows（Windows 上写 `python zl.py ...`）。
 
+## 卸载
+
+仓库目录之外只有 `zl.py install` 写的两样东西（启动器 `zl` 和四个 skill 的用户级副本），先撤掉它们，再删目录：
+
+```bash
+cd ~/zotero-librarian && python3 zl.py install --remove    # 会打印删掉的每个路径
+cd ~ && rm -rf ~/zotero-librarian
+```
+
+```powershell
+cd $HOME\zotero-librarian; python zl.py install --remove
+cd $HOME; Remove-Item -Recurse -Force $HOME\zotero-librarian
+```
+
+目录已经先删了？手动清：启动器（`~/.local/bin/zl`；Windows 是 `%LOCALAPPDATA%\Microsoft\WindowsApps\zl.cmd`），以及
+`~/.claude/skills/` 和 `~/.agents/skills/` 下的 `download`、`tidy`、`discover`、`refs` 四个目录——它们的 `SKILL.md`
+开头都有一行 "installed by zl.py install" 注释，别的 skill 不要动。之后 `zl --version` 应该报找不到命令。
+
+不受影响的：你的 Zotero 库（工具从不写 `zotero.sqlite`，归进去的东西都在你的账号里）。`.env` 里的 API key 随目录一起没了，
+但 key 本身仍然有效，不想要了去 [zotero.org/settings/keys](https://www.zotero.org/settings/keys) 撤销。
+[first-run.md](docs/first-run.md) 让你改的那个 Zotero 设置（关闭自动标签）由你自己改回。Claude Code、Codex、poppler、
+pypdf、Ollama 和它的模型是另外装的，也要另外卸；两个 agent 给这个目录留的会话记录（`~/.claude/projects/`、`~/.codex/sessions/`）
+无害，想清也可以一起删。
+
 ## 它怎么判断
 
 `taxonomy.toml` 里的规则提取证据，过了阈值的直接写入；裁决者——Ollama、任意 OpenAI 兼容服务、或 agent 自己（`ZC_LLM`）——

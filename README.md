@@ -101,6 +101,33 @@ One rule file, one set of skills in the [Agent Skills](https://agentskills.io) f
 copy that `zl.py setup` checks. Use it from any directory with `python3 zl.py install` (launcher `zl` on PATH +
 user-level skills for both agents; `--remove` undoes it). Ubuntu, macOS and Windows (`python zl.py ...`).
 
+## Uninstall
+
+Nothing lives outside the checkout except what `zl.py install` put there (the `zl` launcher and the user-level copies
+of the four skills), so undo that first, then delete the folder:
+
+```bash
+cd ~/zotero-librarian && python3 zl.py install --remove    # prints each path it removes
+cd ~ && rm -rf ~/zotero-librarian
+```
+
+```powershell
+cd $HOME\zotero-librarian; python zl.py install --remove
+cd $HOME; Remove-Item -Recurse -Force $HOME\zotero-librarian
+```
+
+Folder already gone? Remove by hand: the launcher (`~/.local/bin/zl`; Windows `%LOCALAPPDATA%\Microsoft\WindowsApps\zl.cmd`)
+and the `download`, `tidy`, `discover`, `refs` directories under `~/.claude/skills/` and `~/.agents/skills/` — each of
+those `SKILL.md` files starts with an "installed by zl.py install" comment; leave every other skill alone. Afterwards
+`zl --version` should report an unknown command.
+
+What stays: your Zotero library, untouched (the tool never writes `zotero.sqlite`; everything it filed is in your account).
+The API key in `.env` disappears with the folder but remains valid — revoke it at
+[zotero.org/settings/keys](https://www.zotero.org/settings/keys) if you no longer want it. The Zotero setting
+[first-run.md](docs/first-run.md) asks you to change (automatic tags off) is yours to flip back. Claude Code, Codex, poppler,
+pypdf, Ollama and its model were installed separately and are removed separately; the agents' session history for the
+folder (`~/.claude/projects/`, `~/.codex/sessions/`) is harmless and can be deleted too.
+
 ## How it decides
 
 Rules from `taxonomy.toml` extract evidence and assign what clears the thresholds; an adjudicator — Ollama, an
