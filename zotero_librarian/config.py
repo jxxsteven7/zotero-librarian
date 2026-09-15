@@ -4,7 +4,7 @@ take paths, credentials and external programs only from here. Ubuntu / macOS / W
 Layout (ROOT = the parent of this package):
   taxonomy.toml                  collections, tag vocabulary, classification rules, venue abbreviations
   inbox/                         fetch staging area (json/pdf/txt), cleared after saving, not in git
-  cache/library_dump.json        library snapshot from `zc.py dump`, not in git
+  cache/library_dump.json        library snapshot from `zl.py dump`, not in git
   logs/zotero-organize.log.md    audit log of every write (local, not in git)
   proposals/proposal.py          approval-mode batch data
 
@@ -40,7 +40,7 @@ for _s in (sys.stdout, sys.stderr):
 
 LOG_HEADER = """# Audit log
 
-Every write to the library is appended here by the scripts (`zc.py add / tidy / tag / untag / collect / set / recheck --write / apply`),
+Every write to the library is appended here by the scripts (`zl.py add / tidy / tag / untag / collect / set / recheck --write / apply`),
 one section per action: `## <date> — <action>` followed by `- <key> | <title> | what changed`. Local to this machine, not in git.
 """
 

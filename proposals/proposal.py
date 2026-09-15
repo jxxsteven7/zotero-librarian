@@ -1,6 +1,6 @@
-"""Batch proposal data for `zc.py apply` (approval mode).
+"""Batch proposal data for `zl.py apply` (approval mode).
 
-`zc.py add` and `zc.py tidy` cover day-to-day filing; this file is for library-wide operations the user approves as a batch:
+`zl.py add` and `zl.py tidy` cover day-to-day filing; this file is for library-wide operations the user approves as a batch:
   P          key -> (collections, method, embod, tech, base, modality, status, note)   items to (re)file
   RETAG      old tag -> new tag, applied to every item in the library carrying the old tag (vocabulary renames)
   UNTAG      key -> [tags to remove]      correct a wrongly assigned tag
@@ -8,7 +8,7 @@
   EXTRA_TAGS key -> [extra tags]          e.g. type:survey
   RENAMES    key -> new title
   NEW_TAGS   [(tag, reason, items)]       proposed additions to taxonomy.toml, listed in the proposal for approval
-`python3 zc.py proposal` renders proposals/proposal.md (not in git) for the user to review; `zc.py apply --dry-run / --plan / --apply` executes.
+`python3 zl.py proposal` renders proposals/proposal.md (not in git) for the user to review; `zl.py apply --dry-run / --plan / --apply` executes.
 The first full pass over this library (2026-09-11, 122 items) has been applied; its data lives in git history and the log.
 """
 from zotero_librarian import localdb

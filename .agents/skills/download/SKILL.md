@@ -13,11 +13,11 @@ paper page with citation meta such as JMLR). Ask which papers if none were given
 
 ## Steps
 
-1. In the repository directory (the command waits up to 150 s per paper for the server sync — allow a 10-minute
+1. Run (the command waits up to 150 s per paper for the server sync — allow a 10-minute
    tool timeout, and don't poll):
 
    ```
-   python3 zc.py add <links...>
+   python3 zl.py add <links...>
    ```
 
    For each paper it fetches metadata + PDF + full text, checks for duplicates, classifies (collection + tags with
@@ -26,12 +26,12 @@ paper page with citation meta such as JMLR). Ask which papers if none were given
 
 2. Read the output and act only where needed (usually nowhere):
    - **saved**: glance at the evidence lines under "assign"; an obviously wrong tag (evidence is related work or a
-     baseline) -> `python3 zc.py untag <key> <tag> --why <reason>`. Otherwise leave it.
+     baseline) -> `python3 zl.py untag <key> <tag> --why <reason>`. Otherwise leave it.
    - **candidates** (listed, not assigned): put them in the report for the user to decide; one whose evidence clearly
-     meets the definition in `taxonomy.toml` may be added right away with `python3 zc.py tag <key> a,b` — say so.
+     meets the definition in `taxonomy.toml` may be added right away with `python3 zl.py tag <key> a,b` — say so.
    - **PAUSE** (not saved; the exact command to finish is printed):
      - *collection undecided*: read the printed abstract, decide the collection, run the printed
-       `python3 zc.py save <slug> --collection "..."` line (`--drop a,b` removes suggested tags).
+       `python3 zl.py save <slug> --collection "..."` line (`--drop a,b` removes suggested tags).
      - *adjudication pending* (`ZC_LLM=agent`, an **ADJUDICATE** block): for each listed candidate decide from its
        definition, the evidence snippets and the setup excerpt whether the paper's *own* method or experiments meet
        the definition (a baseline, related work or a data-collection rig does not count). Run the printed line with
@@ -41,8 +41,8 @@ paper page with citation meta such as JMLR). Ask which papers if none were given
      the paper page, or the PDF.
    - **venue still `arXiv <- default`**: the script already checked the arXiv comment, PDF first page, Semantic Scholar,
      Crossref and the project page — don't search again; note "no acceptance found". If the user asks, search the web
-     and fix with `python3 zc.py set <key> title="[date] [Venue] Title"`.
-   - **sync unconfirmed**: the Zotero client hasn't uploaded the item yet; `python3 zc.py verify <key>` later. No polling.
+     and fix with `python3 zl.py set <key> title="[date] [Venue] Title"`.
+   - **sync unconfirmed**: the Zotero client hasn't uploaded the item yet; `python3 zl.py verify <key>` later. No polling.
    - The user says "read first": add `--first` (status:to-read-first).
 
 3. **Report**: relay the printed table as is (don't rewrite it), then at most two or three sentences: candidates to
@@ -50,8 +50,8 @@ paper page with citation meta such as JMLR). Ask which papers if none were given
 
 ## Related commands
 
-- Look before saving: `python3 zc.py fetch <link>` (full card) -> `python3 zc.py suggest <slug>` -> `python3 zc.py save <slug> ...`.
-- Re-verify existing arXiv items: `python3 zc.py dump && python3 zc.py recheck [--dates] [--search]`; `--write` after approval.
+- Look before saving: `python3 zl.py fetch <link>` (full card) -> `python3 zl.py suggest <slug>` -> `python3 zl.py save <slug> ...`.
+- Re-verify existing arXiv items: `python3 zl.py dump && python3 zl.py recheck [--dates] [--search]`; `--write` after approval.
 
 ## Don't
 

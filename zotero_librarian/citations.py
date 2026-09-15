@@ -1,7 +1,7 @@
 """cite — the citation neighbourhood of a paper via Semantic Scholar, cross-referenced with the library.
 
-    zc.py refs <key | arXiv id | DOI | link> [--top 15]     references + citations of one paper; which are already in the library
-    zc.py refs --library                                    citation links *between* library papers (reading order, hubs)
+    zl.py refs <key | arXiv id | DOI | link> [--top 15]     references + citations of one paper; which are already in the library
+    zl.py refs --library                                    citation links *between* library papers (reading order, hubs)
 
 Semantic Scholar's public API allows ~1 request/s without a key; set S2_API_KEY in .env for more. Responses are cached
 in cache/s2/ so repeated runs are free."""
@@ -95,7 +95,7 @@ def one(ident, top=15):
         for p in others[:top]:
             ext = p.get("externalIds") or {}; link = ("arXiv:" + ext["ArXiv"]) if ext.get("ArXiv") else ("DOI:" + ext["DOI"] if ext.get("DOI") else "")
             print(f"    {p.get('year') or '????'} | {p.get('citationCount') or 0:>5} cites | {p['title'][:80]} | {p.get('venue') or ''} | {link}")
-    print("\nAdd one with: python3 zc.py add <arXiv id or DOI>")
+    print("\nAdd one with: python3 zl.py add <arXiv id or DOI>")
 
 
 def library(top=20):

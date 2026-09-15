@@ -16,7 +16,7 @@ def recheck(write=False, only=None, dates=False, search=False):
     """[arXiv] titles: look for the published venue (arXiv comment -> PDF first page -> Semantic Scholar -> Crossref -> project page);
     --dates: also check that the title date is the v1 submission date; --search: for items without an arXiv link / watermark,
     search arXiv by title for an earlier preprint (a journal paper with an earlier preprint takes the preprint's v1 date; 3 s each).
-    Run `zc.py dump` first. Lists only; --write changes titles through the Web API."""
+    Run `zl.py dump` first. Lists only; --write changes titles through the Web API."""
     items = localdb.load()
     cands = []
     for it in items:

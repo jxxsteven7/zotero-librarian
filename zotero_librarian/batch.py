@@ -1,8 +1,8 @@
 """Batch changes in approval mode: apply what proposals/proposal.py declares (Web API v3, PATCH-semantics batch POST).
 
-  python3 zc.py apply --dry-run     # offline: build payloads from the local sqlite (version / collection keys), write nothing
-  python3 zc.py apply --plan        # online, read-only: compare server and local versions, list what would be written
-  python3 zc.py apply --apply [--only K1,K2] [--no-rename] [--no-status]   # write, logging every batch
+  python3 zl.py apply --dry-run     # offline: build payloads from the local sqlite (version / collection keys), write nothing
+  python3 zl.py apply --plan        # online, read-only: compare server and local versions, list what would be written
+  python3 zl.py apply --apply [--only K1,K2] [--no-rename] [--no-status]   # write, logging every batch
 
 Rules: only add tags / collections, never delete; automatic tags (type=1) are kept; only titles listed in RENAMES change.
 The three exceptions that remove something: RETAG (vocabulary rename) drops the old tag from every item carrying it;
@@ -23,7 +23,7 @@ UNTAG = getattr(proposal, "UNTAG", {})           # key -> tags to remove (assign
 
 
 def target_keys(con):
-    """Items to touch: those in P plus every item carrying a RETAG old tag (which may not be in P, e.g. added by `zc.py add`)."""
+    """Items to touch: those in P plus every item carrying a RETAG old tag (which may not be in P, e.g. added by `zl.py add`)."""
     trashed = {k for (k,) in con.execute("select key from items where itemID in (select itemID from deletedItems)")}
     keys = set(P) - trashed                       # trashed items are invisible to GET /items; skip them
     for old in RETAG:
@@ -112,7 +112,7 @@ def log(lines):
 
 
 def run(argv):
-    ap = argparse.ArgumentParser(prog="zc.py apply")
+    ap = argparse.ArgumentParser(prog="zl.py apply")
     ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--plan", action="store_true"); ap.add_argument("--apply", action="store_true")
     ap.add_argument("--only"); ap.add_argument("--no-rename", action="store_true"); ap.add_argument("--no-status", action="store_true")
     a = ap.parse_args(argv)

@@ -13,7 +13,7 @@ Arguments: free text, e.g. `7 days cs.RO dexterous hand tactile`, `--days 14 --t
 `--query "in-hand"`. Map it to options:
 
 ```
-python3 zc.py discover [--days N (7)] [--cat cs.RO,cs.AI (cs.RO)] [--tags a,b] [--all] [--query REGEX] [--source arxiv,hf] [--max 400]
+python3 zl.py discover [--days N (7)] [--cat cs.RO,cs.AI (cs.RO)] [--tags a,b] [--all] [--query REGEX] [--source arxiv,hf] [--max 400]
 ```
 
 - `--tags`: wanted tags from `taxonomy.toml`; papers matching any of them are kept (`--all`: all of them). Free-text

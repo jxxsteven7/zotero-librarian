@@ -72,7 +72,7 @@ def verify(key, wait=150, quiet=False):
     env = zapi.env_or_die()
     it = zapi.wait_remote(env, key, wait=wait, step=10)                      # wait=0: a single check
     if not it:
-        if not quiet: print(f"  sync      : x not on the server after {wait}s (is Zotero auto-sync on? check later with `python3 zc.py verify {key}`)")
+        if not quiet: print(f"  sync      : x not on the server after {wait}s (is Zotero auto-sync on? check later with `python3 zl.py verify {key}`)")
         return None
     names = {v: k for k, v in zapi.remote_collections(env)[0].items()}
     d = it["data"]; kids = [(c["data"].get("title"), c["data"].get("linkMode")) for c in zapi.children(env, key)]
@@ -109,7 +109,7 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
 
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, dry_run=False,
         venue=None, date_=None, name=None, url=None, short=None, confirm=None):
-    if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zc.py save <slug> --confirm ...`)")
+    if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zl.py save <slug> --confirm ...`)")
     rows = []
     for link in links:
         try: m = fetch.fetch_one(link)
@@ -125,7 +125,7 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
             print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
-            why = pause_cmd(f"python3 zc.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
+            why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
             rows.append(f"| PAUSE | {m['proposed_title']} | {coll}{'?' if need_coll else ''} | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | {why} |"); continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
         rows.append(row)
@@ -135,7 +135,7 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
 
 def save(slug, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150,
          venue=None, date_=None, name=None, url=None, short=None, confirm=None):
-    """Save something already fetched (after a PAUSE, or after `zc.py fetch`). Without --tags the script's suggestion is used."""
+    """Save something already fetched (after a PAUSE, or after `zl.py fetch`). Without --tags the script's suggestion is used."""
     m = fetch.load(slug); sg = suggest_for(m, confirm=confirm)
     if confirm is None and llm.pending(sg): print(classify.fmt(sg)); print(llm.fmt_llm(sg)); raise SystemExit(f"  x ZC_LLM=agent: answer the ADJUDICATE block with --confirm <tags>|none")
     coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
@@ -231,7 +231,7 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None):
         coll = collection or sg["collection"]
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
-            why = pause_cmd(f"python3 zc.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj)
+            why = pause_cmd(f"python3 zl.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj)
             out.append(f"| PAUSE | {p['title']} | {coll}{'?' if need_coll else ''} | {', '.join(p['tags'])} | {'yes' if r['pdfs'] else 'no'} | {why} |"); continue
         if not write:
             print(f"  [dry-run] would write: {coll} | +{', '.join(p['tags'])} | fields {list(p['fields'])}\n"); continue

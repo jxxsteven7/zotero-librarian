@@ -31,7 +31,7 @@ SETUP_HEADING = re.compile(r"\n\s*(?:\d+(?:\.\d+)*\s+)?(experimental setup|hardw
 
 
 def settings():
-    """ZC_LLM* from .env; a process environment variable of the same name overrides it (`ZC_LLM=agent python3 zc.py add ...`)."""
+    """ZC_LLM* from .env; a process environment variable of the same name overrides it (`ZC_LLM=agent python3 zl.py add ...`)."""
     env = load_env(); g = lambda k, d="": os.environ.get(k) or env.get(k) or d
     return dict(kind=g("ZC_LLM", "ollama").lower(), model=g("ZC_LLM_MODEL", "qwen3.5:9b"), url=g("ZC_LLM_URL", "http://127.0.0.1:11434").rstrip("/"),
                 key=g("ZC_LLM_KEY"), timeout=int(g("ZC_LLM_TIMEOUT", 180)))

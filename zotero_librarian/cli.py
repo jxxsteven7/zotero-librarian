@@ -1,9 +1,9 @@
-"""Subcommands of zc.py. Rules live in AGENTS.md, the taxonomy in taxonomy.toml. (On Windows, `python` instead of `python3`.)"""
+"""Subcommands of zl.py. Rules live in AGENTS.md, the taxonomy in taxonomy.toml. (On Windows, `python` instead of `python3`.)"""
 import argparse, sys
 
 from . import NAME, __version__, config   # noqa: F401 — config forces UTF-8 stdout before anything prints (Windows pipes)
 
-USAGE = """python3 zc.py <command> ...        Zotero library maintenance (rules: AGENTS.md, taxonomy: taxonomy.toml)
+USAGE = """python3 zl.py <command> ...        Zotero library maintenance (rules: AGENTS.md, taxonomy: taxonomy.toml)
 
 Adding papers (the download skill)
   add <link|PDF path>...   fetch -> classify (rules + local LLM) -> save via Zotero desktop -> verify on the server -> log -> report
@@ -36,6 +36,7 @@ Library and batch
   proposal                 render proposals/proposal.py -> proposals/proposal.md
   apply --dry-run|--plan|--apply [--only K1,K2] [--no-rename] [--no-status]   batch write (approval mode)
   setup [--sync-skills]    health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills / agents)
+  install [--remove]       use it from anywhere: launcher `zl` on PATH + user-level skills for Claude Code / Codex / Kimi
   --version                print the version (CHANGELOG.md lists the changes)
 
 With ZC_LLM=agent (no local model) add / save / tidy pause with an ADJUDICATE block; answer it on the printed command with
@@ -73,7 +74,7 @@ def main(argv=None):
 
     if cmd == "add":
         from . import pipeline
-        ap = argparse.ArgumentParser(prog="zc.py add"); ap.add_argument("links", nargs="+"); _add_save_opts(ap); ap.add_argument("--dry-run", action="store_true")
+        ap = argparse.ArgumentParser(prog="zl.py add"); ap.add_argument("links", nargs="+"); _add_save_opts(ap); ap.add_argument("--dry-run", action="store_true")
         a = ap.parse_args(args); pipeline.add(a.links, dry_run=a.dry_run, **_kw(a))
     elif cmd == "fetch":
         from . import fetch
@@ -85,7 +86,7 @@ def main(argv=None):
         m = fetch.load(args[0]); sg = pipeline.suggest_for(m); print(f"=== {m['proposed_title']}"); print(classify.fmt(sg)); print(llm.fmt_llm(sg))
     elif cmd == "save":
         from . import pipeline
-        ap = argparse.ArgumentParser(prog="zc.py save"); ap.add_argument("slug"); _add_save_opts(ap)
+        ap = argparse.ArgumentParser(prog="zl.py save"); ap.add_argument("slug"); _add_save_opts(ap)
         a = ap.parse_args(args); pipeline.save(a.slug, **_kw(a))
     elif cmd == "show":
         from . import fetch; fetch.card(fetch.load(args[0]))
@@ -130,5 +131,7 @@ def main(argv=None):
         from . import batch; batch.run(args)
     elif cmd == "setup":
         from . import setup_check; setup_check.run(args)
+    elif cmd == "install":
+        from . import install; install.run(args)
     else:
         print(f"unknown command {cmd!r}\n"); print(USAGE); sys.exit(2)

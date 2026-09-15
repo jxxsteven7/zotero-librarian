@@ -1,10 +1,10 @@
 """discover — recent papers from arXiv (and Hugging Face daily papers), scored against the taxonomy, nothing saved.
 
-    zc.py discover [--days 7] [--cat cs.RO,cs.AI] [--query REGEX] [--tags a,b] [--all] [--source arxiv,hf] [--max 400]
+    zl.py discover [--days 7] [--cat cs.RO,cs.AI] [--query REGEX] [--tags a,b] [--all] [--source arxiv,hf] [--max 400]
 
 Each candidate's title + abstract is run through the rule classifier (title/abstract evidence only, so it is fast);
 the result is a table of papers with the tags they would get, ranked by how many of the wanted tags they match.
-Papers already in the library are dropped. Pick what you want and add it with `zc.py add <arXiv id>`."""
+Papers already in the library are dropped. Pick what you want and add it with `zl.py add <arXiv id>`."""
 import json, re, sys, time, urllib.error, urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
@@ -105,5 +105,5 @@ def run(days=7, cats=("cs.RO",), query=None, tags=(), require_all=False, sources
     print("\n| # | date | arXiv | title | collection | tags | src |\n|---|---|---|---|---|---|---|")
     for i, (nh, ng, up, p, got, coll) in enumerate(rows, 1):
         print(f"| {i} | {p['date']} | [{p['id']}](https://arxiv.org/abs/{p['id']}) | {p['title'][:90]} | {coll} | {', '.join(got)} | {p['source']}{' ▲' + str(up) if up else ''} |")
-    print("\nAdd one with: python3 zc.py add <arXiv id>")
+    print("\nAdd one with: python3 zl.py add <arXiv id>")
     return rows

@@ -12,8 +12,8 @@ papers (the most-cited-within-library papers are the ones to read first).
 Arguments: a library key, an arXiv id / link, or a DOI; or `library`.
 
 ```
-python3 zc.py refs <key|arXiv|DOI|link> [--top 15]
-python3 zc.py refs --library [--top 20]        # ~1 request per library paper, cached in cache/s2/
+python3 zl.py refs <key|arXiv|DOI|link> [--top 15]
+python3 zl.py refs --library [--top 20]        # ~1 request per library paper, cached in cache/s2/
 ```
 
 Relay the printed lists; point out which references the user already has and which highly cited ones are missing.

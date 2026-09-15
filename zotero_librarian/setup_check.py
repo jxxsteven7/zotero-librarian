@@ -1,6 +1,6 @@
 """New-machine health check (Ubuntu / macOS / Windows, standard library only, changes nothing):
 
-    python zc.py setup [--sync-skills]      # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
+    python zl.py setup [--sync-skills]      # `python` on Windows, `python3` on Linux/macOS (./setup.sh picks one)
 
 Checks, one by one: Python version, .env, Zotero data directory (auto-detected from prefs.js), pdftotext / pypdf,
 HTTPS, the Zotero desktop connector (port 23119), the Web API key (never printed), the classifier's adjudicator
@@ -50,7 +50,7 @@ def run(argv=()):
     report(v >= (3, 11), f"Python {v.major}.{v.minor}.{v.micro} ({sys.executable}; standard library only)",
            "needs 3.11+ (tomllib): Ubuntu `sudo apt install python3`, macOS `brew install python`, Windows python.org or miniforge, with PATH")
     if config.IS_WIN:
-        print("     Windows: where the docs say `python3 zc.py ...`, use `python zc.py ...` (or `py zc.py ...`)")
+        print("     Windows: where the docs say `python3 zl.py ...`, use `python zl.py ...` (or `py zl.py ...`)")
 
     # 2. .env
     env = config.load_env()
@@ -118,7 +118,7 @@ def run(argv=()):
         st = https("http://127.0.0.1:23119/connector/ping", timeout=3)
         report(st == 200, "Zotero desktop is running (connector on 23119)")
     except Exception:
-        report(False, "Zotero desktop not running (127.0.0.1:23119 unreachable)", "`zc.py add` needs it for the PDF; start Zotero. Ignore for dump / tidy / recheck", warn=True)
+        report(False, "Zotero desktop not running (127.0.0.1:23119 unreachable)", "`zl.py add` needs it for the PDF; start Zotero. Ignore for dump / tidy / recheck", warn=True)
 
     # 8. Web API key (never printed)
     if env.get("ZOTERO_API_KEY") and env.get("ZOTERO_LIBRARY_ID"):
@@ -141,7 +141,7 @@ def run(argv=()):
     # 10. skills: Claude Code reads .claude/skills, everything else .agents/skills — the copies must match
     if "--sync-skills" in argv: sync_skills()
     stale = stale_skills()
-    report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zc.py setup --sync-skills", warn=True)
+    report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zl.py setup --sync-skills", warn=True)
 
     # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
     found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
@@ -150,5 +150,5 @@ def run(argv=()):
 
     print()
     if problems:
-        print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zc.py setup` again"); sys.exit(1)
+        print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zl.py setup` again"); sys.exit(1)
     print("All good: open your agent in this directory and use the download skill" + (f", e.g. {found[0][1]}" if found else ""))

@@ -61,7 +61,7 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     extra = ""
     if also:
         try: extra = " | +collection(web api): " + also + " " + zapi.add_collection(got["key"], also)
-        except Exception as e: extra = f" | ! second collection {also} not added ({e}); later: python3 zc.py collect {got['key']} \"{also}\""
+        except Exception as e: extra = f" | ! second collection {also} not added ({e}); later: python3 zl.py collect {got['key']} \"{also}\""
     zapi.log(f"## {date.today()} — download",
              f"- {got['key']} | {title} | +collection: {collection}{extra} | +tags: {', '.join(tags)} | pdf: {'ok' if pdf_ok else 'missing'} | src: {m.get('link')}")
     fetch.clear(slug)

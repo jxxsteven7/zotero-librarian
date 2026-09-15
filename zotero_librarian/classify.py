@@ -3,7 +3,7 @@
     suggest(title, abstract, text) -> dict(collection, also, sure, maybe, flags, evidence, scores)
 
 Three output tiers:
-  sure  — meets the "substantively used" bar; `zc.py add` assigns these directly
+  sure  — meets the "substantively used" bar; `zl.py add` assigns these directly
   maybe — borderline (few body mentions, or suppressed by an exclusion rule); listed for the user, not assigned
   flags — things a human should glance at (collection boundary, no embodiment found, abstract-only judgement...)
 Principles: a title/abstract mention is the paper speaking for itself; body mentions must be frequent (related work and
@@ -221,7 +221,7 @@ def finish(c):
     if "type:survey" in types and coll != tx.SURVEY_HOME and tx.SURVEY_HOME: also = tx.SURVEY_HOME
     if not winner.get("status_only") and not winner.get("default") and "embod" in fam_tags and not fam_tags["embod"]: flags.append("no embodiment found — embod left empty (uncertain)")
     if not winner.get("status_only") and not fam_tags["method"]: flags.append("no method found — left empty" + (" (classic ML papers often carry none)" if winner.get("default") else ""))
-    if not has_pdf: flags.append("no full text — judged from the abstract only; tags may be missing, add them with `zc.py tag` once the PDF is in")
+    if not has_pdf: flags.append("no full text — judged from the abstract only; tags may be missing, add them with `zl.py tag` once the PDF is in")
 
     sure = types + [t for f in tx.FAMILIES for t in fam_tags[f]]
     for t in sure: evidence[t] = S[t]["ev"][:2] if t in S else []

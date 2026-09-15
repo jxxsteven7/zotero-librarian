@@ -11,7 +11,7 @@ config file; a local model (Ollama) — or, if you have no GPU to spare, the age
 the agent otherwise only reads the report.
 
 ```
-$ python3 zc.py add https://arxiv.org/abs/2607.11481
+$ python3 zl.py add https://arxiv.org/abs/2607.11481
 === 2607.11481  (arxiv: 2607.11481)
   title     : [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation   short: TeleDexter
   authors   : Puhao Li, Zeyuan Chen, Yingying Wu ...
@@ -51,14 +51,14 @@ know. `discover` and `refs` serve the same purpose upstream: they shorten the se
 
 | Command | |
 |---|---|
-| `zc.py add <links...>` | The pipeline above. Accepts arXiv (abs / pdf / bare id / alphaxiv / HF papers), DOI, OpenReview, direct PDF links, local PDFs, project pages, and paper pages with `citation_*` meta (JMLR, PMLR, ACL). Pauses when the collection is genuinely ambiguous and prints the command to finish. |
-| `zc.py tidy` | Same treatment for papers you dropped into Zotero by hand: finds items without a status tag, fills metadata, formats the title, sets URL and Short Title, classifies, files. |
-| `zc.py discover` | Recent arXiv papers (and Hugging Face daily papers) scored against *your* tags. Nothing saved; pick and `add`. |
-| `zc.py refs <paper>` / `--library` | References and citations from Semantic Scholar, split into "already in your library" and "missing, by citation count"; or the citation graph among your own papers. |
-| `zc.py recheck` | Re-verify existing arXiv items: accepted somewhere since? Is the title date the v1 date? |
-| `zc.py tag / untag / collect / set / verify` | Single-item edits through the Web API, each with optimistic locking and an audit-log line. |
-| `zc.py apply` | Approval-mode batch changes (vocabulary renames, corrections across many items). |
-| `zc.py setup` | New-machine health check with the fix for every missing piece. |
+| `zl.py add <links...>` | The pipeline above. Accepts arXiv (abs / pdf / bare id / alphaxiv / HF papers), DOI, OpenReview, direct PDF links, local PDFs, project pages, and paper pages with `citation_*` meta (JMLR, PMLR, ACL). Pauses when the collection is genuinely ambiguous and prints the command to finish. |
+| `zl.py tidy` | Same treatment for papers you dropped into Zotero by hand: finds items without a status tag, fills metadata, formats the title, sets URL and Short Title, classifies, files. |
+| `zl.py discover` | Recent arXiv papers (and Hugging Face daily papers) scored against *your* tags. Nothing saved; pick and `add`. |
+| `zl.py refs <paper>` / `--library` | References and citations from Semantic Scholar, split into "already in your library" and "missing, by citation count"; or the citation graph among your own papers. |
+| `zl.py recheck` | Re-verify existing arXiv items: accepted somewhere since? Is the title date the v1 date? |
+| `zl.py tag / untag / collect / set / verify` | Single-item edits through the Web API, each with optimistic locking and an audit-log line. |
+| `zl.py apply` | Approval-mode batch changes (vocabulary renames, corrections across many items). |
+| `zl.py setup` | New-machine health check with the fix for every missing piece. |
 
 The skills `download`, `tidy`, `discover`, `refs` are thin wrappers that run these commands and relay the report — the
 agent never reads PDFs or greps for hardware names itself. Saving tokens is the design rule: anything a script or a
@@ -86,7 +86,7 @@ skills in the [Agent Skills](https://agentskills.io) format under `.agents/skill
 
 | Agent | reads | run a skill | notes |
 |---|---|---|---|
-| Claude Code | `CLAUDE.md` (imports `AGENTS.md`), `.claude/skills/` | `/download <link>` | `.claude/skills` is a verbatim copy of `.agents/skills`; `zc.py setup` checks they match, `--sync-skills` copies |
+| Claude Code | `CLAUDE.md` (imports `AGENTS.md`), `.claude/skills/` | `/download <link>` | `.claude/skills` is a verbatim copy of `.agents/skills`; `zl.py setup` checks they match, `--sync-skills` copies |
 | Codex CLI | `AGENTS.md`, `.agents/skills/` | `$download <link>` | the sandbox blocks network by default — allow it (`network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`) or approve the command |
 | Kimi Code CLI | `AGENTS.md`, `.agents/skills/` (and `.claude/skills/`) | `/skill:download <link>` | |
 | anything else that reads `AGENTS.md` | | tell it to follow `.agents/skills/download/SKILL.md` | the skill files are ordinary Markdown |
@@ -158,36 +158,65 @@ ZC_LLM_KEY=                        # openai only (hosted APIs)
 - **Off** (`ZC_LLM=off`): rules only; candidates are listed for you. Also the automatic fallback when the model server
   is unreachable (the report says so).
 
-`zc.py setup` reports which adjudicator is active and whether it is reachable; `tools/eval_classify.py --llm` measures
+`zl.py setup` reports which adjudicator is active and whether it is reachable; `tools/eval_classify.py --llm` measures
 a model on your library (answers are cached, so comparing merge policies is free after the first run).
 
 ## Install
 
-Requirements: Python 3.11+ (standard library only), `pdftotext` (poppler) or `pip install pypdf`, Zotero 7+ desktop
-with sync enabled, a Zotero Web API key.
+Requirements: Python 3.11+ (standard library only, nothing to `pip install`), `pdftotext` (poppler) or `pip install pypdf`,
+Zotero 7+ desktop with sync enabled, and a Zotero Web API key (read/write, [zotero.org/settings/keys](https://www.zotero.org/settings/keys)).
+
+### 1. Clone and configure (both ways start here)
 
 ```bash
 git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian
 cd ~/zotero-librarian
-cp .env.example .env      # ZOTERO_API_KEY, ZOTERO_LIBRARY_ID; the data directory is auto-detected (chmod 600 .env)
-./setup.sh                # health check: Python / .env / data dir / taxonomy / pdftotext / HTTPS / Zotero / API key / adjudicator / skills
-claude                    # or codex, or kimi — open the agent here and use the download skill: /download <link>
+cp .env.example .env      # fill ZOTERO_API_KEY and ZOTERO_LIBRARY_ID; the data directory is auto-detected (chmod 600 .env)
+./setup.sh                # = python3 zl.py setup: checks Python, .env, data dir, taxonomy, pdftotext, HTTPS, Zotero, API key, adjudicator, skills, agents
 ```
+
+The checkout is the tool's home: `.env`, `taxonomy.toml`, `cache/`, `inbox/` and `logs/` live here whichever way you run it.
+
+### 2a. Use it inside the repository
+
+Open your agent in the checkout — `claude`, `codex` or `kimi` — and type `/download <link>` (Codex: `$download`, Kimi:
+`/skill:download`). The agent finds `AGENTS.md` and the skills in the directory; nothing else to set up. This is the
+mode to use when you also edit the taxonomy or the code. Without an agent, the commands work directly:
+`python3 zl.py add <link>`.
+
+### 2b. Install globally (use it from any directory)
+
+```bash
+python3 zl.py install
+```
+
+This writes a launcher `zl` (`~/.local/bin/zl`; on Windows `zl.cmd` in `%LOCALAPPDATA%\Microsoft\WindowsApps`, both on
+PATH by default) that runs this checkout's `zl.py`, and copies the four skills to the user-level skill directories
+of Claude Code (`~/.claude/skills/`) and Codex / Kimi (`~/.agents/skills/`) with the command replaced by `zl`. From then
+on `zl add <link>` works in any shell and `/download <link>` in an agent session opened in any project. Nothing else is
+copied — the code, configuration and caches stay in the checkout, so `git pull` updates the global install too
+(re-run `python3 zl.py install` when the skills change). `python3 zl.py install --remove` undoes both.
+
+Which to pick: inside the repository if you maintain the taxonomy; globally if you just want `/download` at hand while
+working on something else. Both can coexist (the project-level skills take precedence inside the checkout).
+
+### Platform notes
 
 | Platform | pdftotext | Notes |
 |---|---|---|
 | Ubuntu | `sudo apt install poppler-utils` | system `python3` 3.12 is fine |
 | macOS | `brew install poppler` | python.org installers need `Install Certificates.command` once, or HTTPS fails; Homebrew / conda Python is fine |
-| Windows | `winget install --id oschwartz10612.Poppler -e` (or scoop / choco), reopen the terminal | use `python zc.py ...`; Zotero data is usually `C:\Users\you\Zotero` |
+| Windows | `winget install --id oschwartz10612.Poppler -e` (or scoop / choco), reopen the terminal | use `python zl.py ...`; Zotero data is usually `C:\Users\you\Zotero` |
 | any conda env | `conda install -c conda-forge poppler` | the interpreter that runs the scripts also finds its own env's pdftotext |
 
-`.env`, `cache/` and `inbox/` are git-ignored. Zotero-side settings: turn off `automaticTags` (per client) and, once,
-set the attachment rename template so file names don't inherit the title prefix (see `AGENTS.md`).
+`.env`, `cache/`, `inbox/` and `logs/` are git-ignored, one set per machine; the repository itself can be shared between
+machines. Zotero-side settings: turn off `automaticTags` (per client) and, once, set the attachment rename template so
+file names don't inherit the title prefix (see `AGENTS.md`).
 
 ## How it fits together
 
 ```
-zc.py                     entry point (the short name predates the rename; `python3 zc.py --help`)
+zl.py                     entry point (`python3 zl.py --help`; `zl` on PATH after `zl.py install`)
 taxonomy.toml             your collections, tags, rules, venues
 AGENTS.md                 the agent's rules: how the library is accessed, what it may do, how to use the reports (CLAUDE.md imports it)
 zotero_librarian/
@@ -211,10 +240,41 @@ connector endpoints it uses are the ones the official browser connector uses, bu
 API; tested with Zotero 7 and 10. Semantic Scholar without a key is rate-limited; arXiv's export API often returns
 429 from shared networks, in which case the scripts scrape the abs pages instead.
 
-Contributions welcome — especially taxonomies for other fields, and eval results on other libraries. One feature per
-PR; the merge commit is titled `vX.Y: ...`, bumps `__version__` and adds a line to `CHANGELOG.md` (rules for agents
-and humans alike are in `AGENTS.md`). Skills live in `.agents/skills/` and must stay agent-neutral; the code must run
-on Ubuntu, macOS and Windows with the standard library only.
+## Issues and pull requests
+
+Both are welcome — especially taxonomies for other fields, eval results on other libraries, and reports from other
+agents or Zotero setups. If you have not done this on GitHub before, this is the whole procedure:
+
+**Report a bug or ask for a feature — open an issue.** Go to the repository's *Issues* tab, *New issue*, pick the
+template. For a bug, paste the output of `python3 zl.py setup` and of the command that failed (the scripts never print
+your API key, but check before pasting), and say which agent and OS you use. For a feature, say what you would type
+and what should happen. An issue is also the right place to discuss a change before writing it, so nobody codes
+something that won't be merged.
+
+**Contribute code — open a pull request.**
+
+1. *Fork* the repository (button top right) and clone your fork: `git clone https://github.com/<you>/zotero-librarian.git`.
+2. Make a branch for the one thing you are changing: `git checkout -b my-change`.
+3. Change it. Keep the rules in `AGENTS.md`: standard library only; runs on Ubuntu, macOS and Windows; skills stay
+   agent-neutral and `.agents/skills` / `.claude/skills` identical (`python3 zl.py setup --sync-skills`); everything in
+   English.
+4. Check it: `python3 zl.py setup` passes, and if you touched `taxonomy.toml` or the classifier,
+   `python3 tools/eval_classify.py` before and after (precision must not drop; paste both numbers in the PR).
+5. Commit and push to your fork: `git commit` with a message written the way Google's
+   [*Writing good CL descriptions*](https://google.github.io/eng-practices/review/developer/cl-descriptions.html)
+   says — a first line that is a short imperative summary standing on its own ("Add a taxonomy for NLP" rather than
+   "changes"), a blank line, then *what* and *why* (the problem, your approach, limitations, numbers) — and
+   `git push -u origin my-change`.
+6. On GitHub, *Compare & pull request*. The template asks what changed, why, how you tested it and on which
+   platform / agent. One feature per PR; small PRs are reviewed faster.
+7. Review follows Google's [*The Standard of Code Review*](https://google.github.io/eng-practices/review/reviewer/standard.html):
+   a PR is approved once it clearly improves the code overall, even if it isn't perfect; facts and data over opinions;
+   `AGENTS.md` and consistency with the existing code settle style; comments marked `Nit:` are optional. The
+   maintainer may ask for changes (push more commits to the same branch), then merges with a `vX.Y: ...` commit that
+   bumps `__version__` and adds your line to `CHANGELOG.md`. You don't need to touch the version yourself.
+
+A taxonomy for another field is the most useful contribution: copy `taxonomy.toml`, replace the collections and
+values, run the eval on your own tagged library, and send it as `taxonomies/<field>.toml` with the numbers.
 
 ## License
 
