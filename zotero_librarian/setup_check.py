@@ -25,6 +25,19 @@ def stale_skills():
     return stale
 
 
+def skill_problems():
+    """Agent Skills format: frontmatter with `name` (= directory name, lowercase) and `description` — Codex refuses a skill without them."""
+    out = []
+    for name in sorted(os.listdir(SKILLS_SRC)) if os.path.isdir(SKILLS_SRC) else []:
+        f = os.path.join(SKILLS_SRC, name, "SKILL.md")
+        if not os.path.isfile(f): continue
+        head = open(f, encoding="utf-8").read().split("\n---\n", 1)[0]
+        if not head.startswith("---"): out.append(f"{name}: no frontmatter"); continue
+        if f"name: {name}" not in head: out.append(f"{name}: frontmatter name must be {name!r}")
+        if "description:" not in head: out.append(f"{name}: no description")
+    return out
+
+
 def sync_skills():
     for name in stale_skills():
         os.makedirs(os.path.join(SKILLS_MIRROR, name), exist_ok=True)
@@ -143,8 +156,9 @@ def run(argv=()):
 
     # 10. skills: Claude Code reads .claude/skills, everything else .agents/skills — the copies must match
     if "--sync-skills" in argv: sync_skills()
-    stale = stale_skills()
+    stale = stale_skills(); bad = skill_problems()
     report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zl.py setup --sync-skills", warn=True)
+    report(not bad, "skills: frontmatter valid for every agent" if not bad else "skills: " + "; ".join(bad), "add `name: <dir>` and `description:` between --- lines at the top of SKILL.md", warn=True)
 
     # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
     found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
