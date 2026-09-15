@@ -8,5 +8,4 @@
 *.pdf binary
 *.json text eol=lf
 *.gif binary
-*.cast text eol=lf
 *.png binary

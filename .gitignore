@@ -6,3 +6,5 @@ inbox/
 logs/
 __pycache__/
 *.pyc
+# terminal recordings behind the README GIFs (docs/demo.sh record); only the GIFs are committed
+docs/*.cast

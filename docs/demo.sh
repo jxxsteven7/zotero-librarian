@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The README demos, typed out and run for real (Zotero running; the `add` paper must not be in the library yet):
-#   bash docs/demo.sh record [add|tidy|discover|refs]   -> docs/demo-<name>.cast + .gif (asciinema + agg on PATH)
+#   bash docs/demo.sh record [add|tidy|discover|refs]   -> docs/demo-<name>.gif (asciinema + agg on PATH; the .cast stays local)
 #   bash docs/demo.sh add|tidy|discover|refs             run one demo in this terminal
 # stderr (arXiv rate-limit and Semantic Scholar notices) is not shown; nothing else is hidden. `tidy` and `refs` name
 # keys of the maintainer's library (tidy: a PDF dropped into Zotero by hand, no tags yet) — replace them to re-record.
