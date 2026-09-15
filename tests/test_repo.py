@@ -12,7 +12,7 @@ class Skills(unittest.TestCase):
     def test_skills_are_agent_neutral(self):
         """A skill runs `zl.py <command>` and says nothing agent-specific (no tool names, no other agent's syntax)."""
         for name in os.listdir(config.SKILLS_SRC):
-            s = open(os.path.join(config.SKILLS_SRC, name, "SKILL.md"), encoding="utf-8").read()
+            with open(os.path.join(config.SKILLS_SRC, name, "SKILL.md"), encoding="utf-8") as f: s = f.read()
             self.assertIn("zl.py " + {"download": "add"}.get(name, name), s, name)
             for word in ("allowed-tools", "WebSearch", "Bash(", "mcp__"): self.assertNotIn(word, s, f"{name}: {word}")
 
@@ -30,7 +30,7 @@ class Cli(unittest.TestCase):
 class Version(unittest.TestCase):
     def test_changelog_starts_with_the_current_version(self):
         """The version rule (AGENTS.md): the newest CHANGELOG entry is __version__; tools/check_commits.py checks each commit."""
-        log = open(os.path.join(config.ROOT, "CHANGELOG.md"), encoding="utf-8").read()
+        with open(os.path.join(config.ROOT, "CHANGELOG.md"), encoding="utf-8") as f: log = f.read()
         self.assertEqual(re.search(r"^- \*\*v([\d.]+)\*\*", log, re.M).group(1), __version__)
 
 
