@@ -18,9 +18,13 @@ FIELDS = "title,year,venue,citationCount,externalIds"
 S2DIR = os.path.join(CACHE, "s2")
 
 
+def _cache_path(path, params=""):
+    return os.path.join(S2DIR, re.sub(r"[^\w.-]+", "_", path + params)[:150] + ".json")
+
+
 def _get(path, params=""):
     os.makedirs(S2DIR, exist_ok=True)
-    cache = os.path.join(S2DIR, re.sub(r"[^\w.-]+", "_", path + params)[:150] + ".json")
+    cache = _cache_path(path, params)
     if os.path.exists(cache):
         with open(cache, encoding="utf-8") as f: return json.load(f)
     hdr = {"User-Agent": UA_LOCAL}
@@ -108,15 +112,16 @@ def library(top=20):
     lib = [r for r in localdb.load(refresh=True) if s2_id_for(r)]; idx = _index(lib)
     edges = []; n = 0
     for r in lib:
-        sid = s2_id_for(r)
-        refs = (_get(f"/paper/{urllib.parse.quote(sid)}/references", f"?fields={FIELDS}&limit=500") or {}).get("data", [])
+        sid = s2_id_for(r); q = (f"/paper/{urllib.parse.quote(sid)}/references", f"?fields={FIELDS}&limit=500")
+        fresh = not os.path.exists(_cache_path(*q))
+        refs = (_get(*q) or {}).get("data", [])
         n += 1
         if n % 10 == 0: print(f"  ... {n}/{len(lib)}", file=sys.stderr)
         for x in refs:
             p = x.get("citedPaper") or {}
             t = _match(p, idx)
             if t and t["key"] != r["key"]: edges.append((r["key"], t["key"]))
-        time.sleep(1.1)
+        if fresh: time.sleep(1.1)                                        # ~1 request/s on the public API; a cache hit costs nothing
     by_key = {r["key"]: r for r in lib}
     cited = {}; citing = {}
     for a, b in edges: cited.setdefault(b, set()).add(a); citing.setdefault(a, set()).add(b)

@@ -55,7 +55,7 @@ def recheck(write=False, only=None, dates=False, search=False):
             elif m["venue_src"] != "default": why.append(m["venue_src"])
         if dates and c["aid"] in ax:
             d = re.match(r"\[(\d{4})-(\d{2})(\d{2})\]", c["title"]); v1 = ax[c["aid"]]["v1"]
-            if d and f"{d.group(1)}-{d.group(2)}-{d.group(3)}" != v1:
+            if d and len(v1) == 10 and f"{d.group(1)}-{d.group(2)}-{d.group(3)}" != v1:      # an entry without a published date must not produce "[-]"
                 new = f"[{v1[:4]}-{v1[5:7]}{v1[8:]}]" + new[len(d.group(0)):]
                 why.append(f"date {d.group(0)} is not the v1 submission date {v1} (latest version {ax[c['aid']]['latest']})")
         rows.append((c["key"], c["title"], new if new != c["title"] else None, "; ".join(why)))

@@ -14,11 +14,13 @@ def clean_title(t):
 
 
 def fmt_date(d):
-    """YYYY-MM-DD -> YYYY-MMDD; incomplete dates are written as far as they go, never invented."""
-    d = (d or "").strip()
-    if len(d) >= 10 and d[8:10] != "00": return d[:4] + "-" + d[5:7] + d[8:10]
-    if len(d) >= 7 and d[5:7] != "00": return d[:7]                        # Zotero stores month precision as YYYY-MM-00
-    return d[:4] or "????"
+    """YYYY-MM-DD -> YYYY-MMDD; incomplete dates are written as far as they go, never invented. Unpadded parts are padded
+    (`2019-6-9`, the HighWire citation_date format); Zotero stores month precision as YYYY-MM-00."""
+    m = re.match(r"\s*(\d{4})(?:[-/.](\d{1,2}))?(?:[-/.](\d{1,2}))?", d or "")
+    if not m: return "????"
+    y, mo, da = m.group(1), int(m.group(2) or 0), int(m.group(3) or 0)
+    if mo and da: return f"{y}-{mo:02d}{da:02d}"
+    return f"{y}-{mo:02d}" if mo else y
 
 
 def split_prefix(t):
@@ -28,6 +30,15 @@ def split_prefix(t):
     m = re.match(r"^\s*\[([^\]]*)\]\s*(.*)$", t or "", re.S)
     if m and re.match(r"^\d{4}", m.group(1)): return m.group(1), None, m.group(2).strip()
     return None, None, (t or "").strip()
+
+
+def merge_prefix(old_date, old_venue, date_, venue):
+    """An existing `[date] [venue]` prefix wins over what the scripts derived (AGENTS.md: user-set titles are never changed):
+    the date only gains precision, the venue only fills a placeholder (`????` / `arXiv`). A nickname sitting in the venue
+    slot (`[2023] [ALOHA/ACT] Title`) is therefore kept too. Returns (date, venue)."""
+    if old_date and (date_ in ("????", "") or len(old_date) >= len(date_)): date_ = old_date
+    if old_venue and (old_venue not in ("????", "arXiv") or venue in ("????", "arXiv")): venue = old_venue
+    return date_, venue
 
 
 def norm_title(t):

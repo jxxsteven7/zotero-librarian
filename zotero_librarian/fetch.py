@@ -33,6 +33,11 @@ def clear(slug):
 
 _LIB = None
 
+def forget_library():
+    """Drop the cached snapshot after a save, so the next duplicate check (the same link twice in one `add`) sees the new item."""
+    global _LIB
+    _LIB = None
+
 def find_duplicate(m):
     global _LIB
     if _LIB is None: _LIB = localdb.dump()          # refresh the local library snapshot once
@@ -41,8 +46,8 @@ def find_duplicate(m):
     doi = (m["id"] if m["source"] == "crossref" else m.get("doi") or "").lower()
     nt = norm_title(m["title"])
     for it in lib:
-        blob = " ".join(str(it.get(k) or "") for k in ("url", "doi", "title")).lower()
-        if aid and re.search(r"(?<![\d.])" + re.escape(aid.lower()) + r"(?![\d])", blob): return it
+        blob = " ".join(str(it.get(k) or "") for k in ("url", "doi", "extra", "title")).lower()   # extra carries "arXiv:<id> [cs.RO]"
+        if aid and re.search(r"(?<!\d)(?<!\d\.)" + re.escape(aid.lower()) + r"(?!\d)", blob): return it   # not inside a longer number; "arxiv.<id>" (the DOI the tool writes) is fine
         if doi and doi in blob: return it
         if nt and norm_title(it.get("title")) == nt: return it
     return None
@@ -125,6 +130,7 @@ def card(m):
     others = [u for u in (m.get("project_urls") or []) if u != m.get("project_url")]
     print(f"  project   : {m.get('project_url') or 'none found (URL field will be ' + (m.get('url') or '-') + '; override with --url)'}" + (f"   candidates: {others}" if others else ""))
     print(f"  PDF       : {'inbox/' + m['slug'] + '.pdf  <- ' + m['pdf_src'] if m.get('pdf_src') else 'not obtained  ' + '; '.join(m.get('pdf_tried', []))}")
-    print(f"  full text : inbox/{m['slug']}.txt" if m.get("pdf_src") else "  full text : none (abstract only)")
+    if os.path.exists(os.path.join(INBOX, m["slug"] + ".txt")): print(f"  full text : inbox/{m['slug']}.txt")
+    else: print("  full text : none (abstract only" + ("; the PDF is there but no pdftotext / pypdf to read it" if m.get("pdf_src") else "") + ")")
     if m.get("duplicate"): print(f"  ! duplicate: already in the library as {m['duplicate']['key']} | {m['duplicate']['title']}")
     print(f"  abstract  : {m['abstract'][:1500]}\n")

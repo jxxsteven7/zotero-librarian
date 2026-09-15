@@ -2,6 +2,23 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v0.13** (2026-09-15) — macOS test run + code review. `setup` no longer passes a copied `.env.example`: placeholder credentials
+  are reported as such (`ZOTERO_API_KEY` one token, `ZOTERO_LIBRARY_ID` numeric), every Web API command stops on them with the
+  same message instead of a URL error, and with a real key but no id `setup` prints the user id the key belongs to. A PDF without
+  pdftotext / pypdf is judged from the abstract *and flagged so*; the fetch card no longer names a full text that does not exist.
+  `tidy` keeps an existing `[date] [venue]` prefix (date only gains precision, only `????` / `arXiv` venues are filled; a
+  nickname in the venue slot survives), never writes a second reading status when the server already has one, and rejects an
+  unknown `--collection` instead of logging a filing that did not happen. `add` checks `--collection` / `--also` and the
+  desktop connector before fetching anything, and a save failure no longer aborts the rest of the list (row + `save` command
+  to retry); an item the connector created before a later step failed is logged as `download (incomplete)`, and `save` re-runs
+  the duplicate check instead of trusting the inbox record. `tag`: a `status:` tag replaces the reading status, backwards only
+  with `--force`; `untag` refuses `keep_bare_tags` and the last reading status. arXiv API: a paper whose title contains
+  "Error" is no longer mistaken for the API's error entry; the duplicate check finds an arXiv id in the DOI the tool itself
+  writes (`10.48550/arXiv.<id>`) and in `extra`; unpadded page dates (`2019-6-9`) format correctly; Crossref
+  `"date-parts": []`, an arXiv entry without a date and `verify` on a child item no longer crash. The taxonomy test checks
+  the rule keys the classifier actually reads (`excludes` / `excluded_by` / `weak_with` / `strip` / `head_only`). The
+  read-only sqlite snapshot is copied once per library state instead of on every query (4-8 copies per added paper before);
+  `refs --library` pauses only after a request that actually went to Semantic Scholar, not after a cache hit.
 - **v0.12** (2026-09-15) — Kimi Code CLI dropped from the supported agents (never verified end to end); Claude Code and Codex
   remain, both exercised live through the `download` skill.
 - **v0.11** (2026-09-15) — review before open-sourcing: `add` resolves the collection before creating the item (a missing

@@ -31,6 +31,7 @@ Arguments (optional): item keys to restrict to, e.g. `ABCD1234,EFGH5678`.
 
 3. Relay the printed table; two or three sentences at most on what needs the user's decision.
 
-Notes: an existing `[date] [venue]` prefix is never made worse (a known venue is not replaced by `????`); an item
-without arXiv id / DOI / page metadata keeps its item date and gets `[????]` as venue — mention it so the user can
-fix it with `python3 zl.py set <key> title="..."`.
+Notes: an existing `[date] [venue]` prefix is kept (the date only gains precision, only a `????` / `arXiv` venue is
+replaced by one the scripts find — a hand-set date, venue or nickname bracket stays); an item without arXiv id / DOI /
+page metadata keeps its item date and gets `[????]` as venue — mention it so the user can fix it with
+`python3 zl.py set <key> title="..."`.

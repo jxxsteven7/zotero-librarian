@@ -4,8 +4,8 @@ and only add; the remote `version` is the optimistic lock. The API key is never 
 import json, sys, time, urllib.error, urllib.request
 from datetime import date
 
-from .config import append_log, load_env
-from .taxonomy import check_tags
+from .config import append_log, cred_problems, load_env
+from .taxonomy import KEEP_BARE_TAGS, READ_AXIS, check_tags
 
 API = "https://api.zotero.org"
 
@@ -29,9 +29,12 @@ def req(env, method, path, body=None, params=""):
 
 
 def env_or_die():
+    """.env with usable Web API credentials, or exit with what is wrong (a placeholder id would otherwise surface as a URL error)."""
     env = load_env()
-    if not env.get("ZOTERO_API_KEY"):
-        sys.exit("ZOTERO_API_KEY missing: put ZOTERO_API_KEY=... in the repo's .env (never paste it into the conversation)")
+    bad = cred_problems(env)
+    if bad:
+        sys.exit("; ".join(f"{k} {v}" for k, v in bad.items()) + " — fill ZOTERO_API_KEY / ZOTERO_LIBRARY_ID in the repo's .env "
+                 "(https://www.zotero.org/settings/keys; never paste the key into the conversation); `python3 zl.py setup` checks them")
     return env
 
 
@@ -72,6 +75,7 @@ def wait_remote(env, key, wait=180, step=10):
     while True:
         st, it = get_item(env, key)
         if st == 200: return it
+        if st in (401, 403): raise RuntimeError(f"Web API {st}: the key is invalid or has no access to library {env['ZOTERO_LIBRARY_ID']} — not a sync delay")
         if time.time() - t0 > wait: return None
         time.sleep(step)
 
@@ -96,8 +100,14 @@ def add_collection(key, name, wait=180):
     return "ok"
 
 
-def add_tags(key, tags):
-    """Add tags to an item (remote tags + new ones, never removes). Used after discussing candidate tags with the user. Logged."""
+def _read_status(tags):
+    """The read-axis status among `tags` (exactly one per item is the rule), or None."""
+    return next((t for t in tags if t.startswith("status:") and t[7:] in READ_AXIS), None)
+
+
+def add_tags(key, tags, force=False):
+    """Add tags to an item (remote tags + new ones). A read-axis status replaces the current one, so an item never carries
+    two; moving it backwards (read -> to-read) needs `force`, i.e. the user's explicit request. Logged."""
     tags = [t.strip() for t in tags if t.strip()]
     check_tags(tags)
     env = env_or_die()
@@ -106,20 +116,32 @@ def add_tags(key, tags):
     cur = [t["tag"] for t in it["data"]["tags"]]
     new = [t for t in tags if t not in cur]
     if not new: return "(already tagged)"
-    patch(env, key, it["version"], {"tags": it["data"]["tags"] + [{"tag": t, "type": 0} for t in new]})   # type 0 = manual tag
-    log(f"## {date.today()} — tag", f"- {key} | {it['data']['title']} | +tags: {', '.join(new)}")
-    return "ok +" + ", ".join(new)
+    keep, old = it["data"]["tags"], None
+    want, have = _read_status(new), _read_status(cur)
+    if want and have:
+        if READ_AXIS.index(want[7:]) < READ_AXIS.index(have[7:]) and not force:
+            raise RuntimeError(f"{have} -> {want} moves the reading status backwards; only on the user's explicit request: add --force")
+        keep = [t for t in keep if t["tag"] != have]; old = have
+    patch(env, key, it["version"], {"tags": keep + [{"tag": t, "type": 0} for t in new]})   # type 0 = manual tag
+    log(f"## {date.today()} — tag", f"- {key} | {it['data']['title']} | +tags: {', '.join(new)}" + (f" | -tags: {old} (status replaced)" if old else ""))
+    return "ok +" + ", ".join(new) + (f" (−{old})" if old else "")
 
 
 def remove_tags(key, tags, why=""):
-    """Remove tags. Only to correct a tag the script just assigned wrongly, or when the user explicitly asks. Logged as -tags."""
+    """Remove tags. Only to correct a tag the script just assigned wrongly, or when the user explicitly asks. Never a plugin's
+    bare tag (keep_bare_tags) nor the last reading status (`zl.py tag <key> status:...` replaces it). Logged as -tags."""
     tags = [t.strip() for t in tags if t.strip()]
     env = env_or_die()
     st, it = get_item(env, key)
     if st != 200: raise RuntimeError(f"item {key} not on the server ({st})")
     gone = [t["tag"] for t in it["data"]["tags"] if t["tag"] in tags]
     if not gone: return "(not tagged with those)"
-    patch(env, key, it["version"], {"tags": [t for t in it["data"]["tags"] if t["tag"] not in tags]})
+    bare = [t for t in gone if t in KEEP_BARE_TAGS]
+    if bare: raise RuntimeError(f"{', '.join(bare)}: written by a plugin (keep_bare_tags in taxonomy.toml), never removed")
+    left = [t for t in it["data"]["tags"] if t["tag"] not in tags]
+    if _read_status(gone) and not _read_status(t["tag"] for t in left):
+        raise RuntimeError("an item keeps exactly one reading status: set the new one with `zl.py tag <key> status:...` (it replaces the old one)")
+    patch(env, key, it["version"], {"tags": left})
     log(f"## {date.today()} — untag", f"- {key} | {it['data']['title']} | -tags: {', '.join(gone)}" + (f" | {why}" if why else ""))
     return "ok −" + ", ".join(gone)
 

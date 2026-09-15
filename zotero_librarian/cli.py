@@ -22,8 +22,8 @@ Organizing what is already in Zotero
                            collection — via the Web API. --dry-run --limit 20 samples the plan; --create-collections adds
                            the taxonomy's collections that the library lacks
   verify <key> [--wait S]  server + local state of one item
-  tag <key> a,b            add tags (never removes)
-  untag <key> a,b [--why REASON]   remove tags (only to correct a fresh mistake, or on explicit request)
+  tag <key> a,b [--force]  add tags; a status: tag replaces the reading status (--force to move it backwards)
+  untag <key> a,b [--why REASON]   remove tags (only to correct a fresh mistake, or on explicit request; never a plugin tag or the last status)
   collect <key> <collection>       add a second collection
   set <key> field=value ...        change fields (title, url, shortTitle, ...)
   recheck [--dates] [--search] [--write] [--only K1,K2]   re-verify [arXiv] items: published? v1 date?
@@ -111,7 +111,7 @@ def run(cmd, args):
     elif cmd == "verify":
         from . import pipeline; pipeline.verify(args[0], wait=_opt(args, "--wait", 0, int))
     elif cmd == "tag":
-        from . import zapi; print(zapi.add_tags(args[0], args[1].split(",")))
+        from . import zapi; print(zapi.add_tags(args[0], args[1].split(","), force="--force" in args))
     elif cmd == "untag":
         from . import zapi; print(zapi.remove_tags(args[0], args[1].split(","), _opt(args, "--why", "")))
     elif cmd == "collect":

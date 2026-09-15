@@ -8,6 +8,17 @@ class Titles(unittest.TestCase):
     def test_date_is_written_as_far_as_it_is_known(self):
         self.assertEqual(titles.fmt_date("2025-05-06"), "2025-0506"); self.assertEqual(titles.fmt_date("2008-11-00"), "2008-11")
         self.assertEqual(titles.fmt_date("1987"), "1987"); self.assertEqual(titles.fmt_date(""), "????")
+        self.assertEqual(titles.fmt_date("2019-6-9"), "2019-0609"); self.assertEqual(titles.fmt_date("2019/6/9"), "2019-0609")   # HighWire citation_date, unpadded
+        self.assertEqual(titles.fmt_date("2019-00-00"), "2019"); self.assertEqual(titles.fmt_date("June 2019"), "????")
+
+    def test_an_existing_prefix_is_kept_unless_it_is_a_placeholder(self):
+        """tidy on an item that already carries [date] [venue]: the date only gains precision, the venue only fills ???? / arXiv,
+        a nickname in the venue slot survives."""
+        self.assertEqual(titles.merge_prefix("2023-0512", "RSS", "2024-0301", "T-RO"), ("2023-0512", "RSS"))
+        self.assertEqual(titles.merge_prefix("2023-05", "arXiv", "2023-0512", "CoRL"), ("2023-0512", "CoRL"))
+        self.assertEqual(titles.merge_prefix("2023", "ALOHA/ACT", "2023-0423", "RSS"), ("2023-0423", "ALOHA/ACT"))
+        self.assertEqual(titles.merge_prefix("2023-0512", "????", "????", "arXiv"), ("2023-0512", "????"))
+        self.assertEqual(titles.merge_prefix(None, None, "2024-0301", "T-RO"), ("2024-0301", "T-RO"))
 
     def test_prefix_round_trip(self):
         t = titles.make_title({"title": "Title: sub", "date": "2025-05-06", "venue": "CoRL"})

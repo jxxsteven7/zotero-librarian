@@ -32,7 +32,8 @@ def connector(path, body=None, headers=None):
 
 def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, force=False, url=None, short=None):
     m = fetch.load(slug)
-    if m.get("duplicate") and not force: raise RuntimeError(f"already in the library: {m['duplicate']['key']} | {m['duplicate']['title']} (use --force to add anyway)")
+    dup = fetch.find_duplicate(m)                                                 # checked again now, not the inbox JSON's answer from fetch time: a failed or repeated save must not add the paper twice
+    if dup and not force: raise RuntimeError(f"already in the library: {dup['key']} | {dup['title']} (use --force to add anyway)")
     if collection not in COLLECTIONS or (also and also not in COLLECTIONS): raise RuntimeError(f"collection must be one of {COLLECTIONS}")
     tags = with_status([t.strip() for t in tags if t.strip()])
     check_tags(tags)
@@ -45,19 +46,24 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
     sid = hashlib.sha1(f"{slug}{time.time()}".encode()).hexdigest()[:8]
     st, body = connector("/connector/saveItems", {"sessionID": sid, "uri": m["url"], "items": [item]})
     if st != 201: raise RuntimeError(f"saveItems failed {st}: {body[:300]}")
-    st, body = connector("/connector/updateSession", {"sessionID": sid, "target": target, "tags": tags})
-    if st != 200: raise RuntimeError(f"updateSession failed {st}: {body[:300]} (item created, but tags / collection were not applied)")
-    pdf_ok = False
-    if os.path.exists(pdf):
-        meta = json.dumps({"sessionID": sid, "parentItemID": slug, "title": "Full Text PDF", "url": m.get("pdf_src") or m["url"]})
-        with open(pdf, "rb") as f: data = f.read()
-        st, body = connector("/connector/saveAttachment?sessionID=" + sid, data, headers={"X-Metadata": meta, "Content-Type": "application/pdf"})
-        pdf_ok = st == 201
-        if not pdf_ok: print(f"  ! saveAttachment failed {st}: {body[:300]}")
-    for _ in range(5):                                                            # the client commits the new item within a moment; read it back by title
-        time.sleep(1); got = localdb.item_by_title(title)
-        if got: break
-    if not got: raise RuntimeError("connector returned 201 but the title is not in the local database — check Zotero")
+    try:                                                                          # from here on an item exists: whatever goes wrong is logged before it is raised
+        st, body = connector("/connector/updateSession", {"sessionID": sid, "target": target, "tags": tags})
+        if st != 200: raise RuntimeError(f"updateSession failed {st}: {body[:300]} (item created, but tags / collection were not applied)")
+        pdf_ok = False
+        if os.path.exists(pdf):
+            meta = json.dumps({"sessionID": sid, "parentItemID": slug, "title": "Full Text PDF", "url": m.get("pdf_src") or m["url"]})
+            with open(pdf, "rb") as f: data = f.read()
+            st, body = connector("/connector/saveAttachment?sessionID=" + sid, data, headers={"X-Metadata": meta, "Content-Type": "application/pdf"})
+            pdf_ok = st == 201
+            if not pdf_ok: print(f"  ! saveAttachment failed {st}: {body[:300]}")
+        for _ in range(5):                                                        # the client commits the new item within a moment; read it back by title
+            time.sleep(1); got = localdb.item_by_title(title)
+            if got: break
+        if not got: raise RuntimeError("connector returned 201 but the title is not in the local database — check Zotero")
+    except Exception as e:
+        key = (localdb.item_by_title(title) or {}).get("key", "?")
+        zapi.log(f"## {date.today()} — download (incomplete)", f"- {key} | {title} | item created by Zotero desktop, then: {str(e)[:160]} | src: {m.get('link')}")
+        raise
     missing = [f for f in got["files"] if not os.path.exists(f)]
     print(f"  saved     : {got['key']} <- Zotero desktop | {' + '.join(got['collections'])} | {', '.join(sort_tags(got['tags']))}")
     print(f"  PDF       : {', '.join(os.path.basename(f) for f in got['files']) if got['files'] else 'none'}" + (f"  ! missing files {missing}" if missing else ""))
@@ -67,7 +73,7 @@ def save(slug, collection, tags, also=None, venue=None, date_=None, name=None, f
         except Exception as e: extra = f" | ! second collection {also} not added ({e}); later: python3 zl.py collect {got['key']} \"{also}\""
     zapi.log(f"## {date.today()} — download",
              f"- {got['key']} | {title} | +collection: {collection}{extra} | +tags: {', '.join(tags)} | pdf: {'ok' if pdf_ok else 'missing'} | src: {m.get('link')}")
-    fetch.clear(slug)
+    fetch.clear(slug); fetch.forget_library()
     if extra: print(extra.strip(" |"))
     got.update(title=title, pdf_ok=pdf_ok, tags_written=tags, collection=collection, also=also, url=item["url"], short=item["shortTitle"])
     return got

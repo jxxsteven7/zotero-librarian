@@ -15,7 +15,7 @@ from .config import DATA_DIR, INBOX
 from .pdf import pdf_text, project_urls, project_url_score
 from .published import lookup_published
 from .sources import ARXIV_ID, meta_arxiv, meta_crossref, meta_page
-from .titles import fmt_date, short_title, split_prefix
+from .titles import fmt_date, merge_prefix, short_title, split_prefix
 
 COLS = ["key", "title", "collection", "tags", "PDF", "notes"]
 
@@ -27,7 +27,9 @@ def _text(slug):
 
 
 def suggest_for(m, text=None, confirm=None):
-    return llm.suggest(m["title"], m.get("abstract", ""), _text(m["slug"]) if text is None else text, has_pdf=bool(m.get("pdf_src")) if text is None else bool(text), confirm=confirm)
+    """Classify a staged paper. `has_pdf` means full text, not a downloaded file: a PDF without pdftotext / pypdf gives none."""
+    text = _text(m["slug"]) if text is None else text
+    return llm.suggest(m["title"], m.get("abstract", ""), text, has_pdf=bool(text), confirm=confirm)
 
 
 def brief(m, sg=None):
@@ -87,8 +89,8 @@ def verify(key, wait=150, quiet=False, expect=None):
         return None
     names = {v: k for k, v in zapi.remote_collections(env)[0].items()}
     d = it["data"]; kids = [(c["data"].get("title"), c["data"].get("linkMode")) for c in zapi.children(env, key)]
-    synced, ver = localdb.sync_state(key)
-    info = dict(version=it["version"], title=d["title"], tags=sorted(t["tag"] for t in d["tags"]), collections=[names.get(c, c) for c in d["collections"]],
+    synced, ver = localdb.sync_state(key)                                  # .get: a child attachment / note has no collections (or title) field
+    info = dict(version=it["version"], title=d.get("title", ""), tags=sorted(t["tag"] for t in d.get("tags", [])), collections=[names.get(c, c) for c in d.get("collections", [])],
                 url=d.get("url", ""), short=d.get("shortTitle", ""), children=kids, local_synced=synced, local_version=ver)
     if quiet: return info
     diff = []
@@ -123,13 +125,19 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
     """Save + verify + report row. Shared by add and save (the connector already appended the audit log)."""
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
     got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
-    info = verify(got["key"], wait=wait, expect=dict(collection=coll, tags=tags, url=got["url"], short=got["short"])) if wait else None
+    info = None
+    if wait:
+        try: info = verify(got["key"], wait=wait, expect=dict(collection=coll, tags=tags, url=got["url"], short=got["short"]))
+        except Exception as e: print(f"  sync      : x {e}")                # saved; only the check failed — the row says "sync unconfirmed"
     return got, report_row(got, sg, info)                                  # printed once, in the caller's table
 
 
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, dry_run=False,
         venue=None, date_=None, name=None, url=None, short=None, confirm=None):
     if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zl.py save <slug> --confirm ...`)")
+    for c in (collection, also):
+        if c and c not in tx.COLLECTIONS: raise SystemExit(f"collection must be one of {tx.COLLECTIONS}, not {c!r}")
+    if not dry_run and not connector.ping(): raise SystemExit("Zotero desktop is not running (connector port 23119 unreachable): start it first, or --dry-run to only classify")
     rows = []; n = dict(saved=0, paused=0, duplicate=0, failed=0)
     for link in links:
         try: m = fetch.fetch_one(link)
@@ -147,7 +155,10 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
         if need_coll or need_adj:
             why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj, m.get("abstract", ""))
             rows.append(["PAUSE", m["proposed_title"], coll + ("?" if need_coll else ""), ", ".join(tags_), "yes" if m.get("pdf_src") else "no", why]); n["paused"] += 1; continue
-        got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
+        try: got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
+        except Exception as e:                                                # the connector / server failed on this one: the rest of the list still runs
+            print(f"  x {e}\n  -> staged in inbox/; retry with: python3 zl.py save {m['slug']}\n")
+            rows.append(["—", m["proposed_title"], coll, ", ".join(tags_), "yes" if m.get("pdf_src") else "no", f"x not saved: {str(e)[:160]} — retry: python3 zl.py save {m['slug']}"]); n["failed"] += 1; continue
         rows.append(row); n["saved"] += 1
     print("\n" + table.render(COLS, rows))
     if len(links) > 1: print(f"\n{len(links)} links: " + ", ".join(f"{v} {k}" for k, v in n.items() if v) + (" — the PAUSE rows each print the command that finishes them" if n["paused"] else ""))
@@ -213,8 +224,7 @@ def plan_item(r, confirm=None):
     else:
         date_ = fmt_date((r.get("date") or "")[:10]); venue = "????"; src = "item date; no arXiv id / DOI / page -> venue unknown"
         notes.append("no arXiv id / DOI: date from the item, venue left as ????")
-    if old_date and (date_ in ("????", "") or len(old_date) > len(date_)): date_ = old_date          # never make an existing prefix worse
-    if old_venue and (venue in ("????", "arXiv") or old_venue == venue): venue = old_venue
+    date_, venue = merge_prefix(old_date, old_venue, date_, venue)     # an existing prefix is kept: precision may grow, ???? / arXiv may be filled
     if not text and not abstract: notes.append("no PDF text and no abstract: nothing to classify from")
     sg = llm.suggest(title, abstract, text, has_pdf=bool(text), confirm=confirm)
     new_title = f"[{date_}] [{venue}] {title}" if tx.TITLE_PREFIX else r["title"]
@@ -235,6 +245,7 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
     `limit`: only the first N (sample a plan with --dry-run). `create_collections`: create the taxonomy's collections
     that the library lacks (the only way the scripts ever create a collection)."""
     if confirm is not None and len(only or ()) != 1: raise SystemExit("--confirm answers one item's ADJUDICATE block: use --only <key> --confirm ...")
+    if collection and collection not in tx.COLLECTIONS: raise SystemExit(f"collection must be one of {tx.COLLECTIONS}, not {collection!r}")
     rows = localdb.load(refresh=True)
     todo = untidy_items(rows, only)
     if limit: todo = todo[:limit]
@@ -273,15 +284,17 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         want_c = [ck[c] for c in ([coll] + ([sg["also"]] if sg["also"] else [])) if c in ck and ck[c] not in d["collections"]]
         if want_c: patch["collections"] = d["collections"] + want_c
         have = {t["tag"] for t in d["tags"]}; new_tags = [t for t in p["tags"] if t not in have]
+        if any(t.startswith("status:") for t in have): new_tags = [t for t in new_tags if not t.startswith("status:")]   # the plan came from the local copy; a status set elsewhere (server ahead) stays the one status
         if new_tags: patch["tags"] = d["tags"] + [{"tag": t, "type": 0} for t in new_tags]
         changed = [k for k in patch if k not in ("tags", "collections")]
-        done = (["+" + ", ".join(new_tags)] if new_tags else []) + (["fields " + ", ".join(changed)] if changed else []) + \
-               (["collection " + ", ".join(c for c in [coll, sg["also"]] if c)] if want_c else [])
+        added_c = [c for c in [coll, sg["also"]] if c in ck and ck[c] in want_c]
+        done = (["+" + ", ".join(new_tags)] if new_tags else []) + (["fields " + ", ".join(changed)] if changed else []) + (["collection " + ", ".join(added_c)] if added_c else [])
         if patch:
             zapi.patch(env, p["key"], it["version"], patch)
-            zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | +collection: {', '.join(c for c in [coll, sg['also']] if c)} | +tags: {', '.join(new_tags)} | fields: {', '.join(changed)} | {p['src']}")
+            zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | " + " | ".join(([f"+collection: {', '.join(added_c)}"] if added_c else []) +
+                     ([f"+tags: {', '.join(new_tags)}"] if new_tags else []) + ([f"fields: {', '.join(changed)}"] if changed else []) + [p["src"]]))
         print("  written   : " + (" | ".join(done) or "nothing — already as planned") + " <- Web API")
-        info = verify(p["key"], wait=wait, expect=dict(collection=coll, tags=p["tags"], url=p["fields"].get("url"), short=p["fields"].get("shortTitle"))) if wait else None
+        info = verify(p["key"], wait=wait, expect=dict(collection=coll, tags=new_tags, url=p["fields"].get("url"), short=p["fields"].get("shortTitle"))) if wait else None
         got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
         row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))
         out.append(row); print("")

@@ -41,8 +41,10 @@ def meta_arxiv_api(aid):
     ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
     xml = get_text(f"https://export.arxiv.org/api/query?id_list={aid}")
     e = ET.fromstring(xml).find("a:entry", ns)
-    if e is None or e.find("a:title", ns) is None or "Error" in (e.findtext("a:title", "", ns)): raise RuntimeError("arXiv API has no entry for " + aid)
-    idurl = e.findtext("a:id", "", ns); ver = re.search(r"v(\d+)$", idurl)
+    idurl = e.findtext("a:id", "", ns) if e is not None else ""
+    if e is None or e.find("a:title", ns) is None or "/api/errors" in idurl or e.findtext("a:title", "", ns).strip() == "Error":   # the API's error entry, not a paper titled "Error-Aware ..."
+        raise RuntimeError("arXiv API has no entry for " + aid)
+    ver = re.search(r"v(\d+)$", idurl)
     cat = e.find("x:primary_category", ns); cat = cat.get("term") if cat is not None else ""
     return dict(title=clean_title(e.findtext("a:title", "", ns)),
                 authors=[split_name(a.findtext("a:name", "", ns)) for a in e.findall("a:author", ns)],
@@ -113,7 +115,7 @@ def meta_arxiv(aid):
     return m
 
 def cr_date(parts):
-    p = (parts or {}).get("date-parts", [[None]])[0]
+    p = ((parts or {}).get("date-parts") or [[None]])[0]                # Crossref also sends "date-parts": [] for an unknown date
     if not p or p[0] is None: return ""
     return "-".join(f"{x:02d}" if i else str(x) for i, x in enumerate(p))
 

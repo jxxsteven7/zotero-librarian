@@ -11,7 +11,7 @@ Exit code 1 = something is missing (a stale skill copy or bad frontmatter counts
 --offline keeps only the checks that need nothing but the repository (Python, taxonomy, pdftotext as a warning, skills):
 CI runs it on Ubuntu / macOS / Windows for every pull request, and a contributor without a Zotero library runs it locally.
 """
-import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
+import filecmp, json, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 
 from . import config                         # taxonomy / llm are imported inside the checks: a broken taxonomy.toml must be reported, not crash the import
 from .http import UA_LOCAL
@@ -118,11 +118,13 @@ def machine_checks(env, report):
     if os.path.exists(config.ENV_PATH):
         mode = stat.S_IMODE(os.stat(config.ENV_PATH).st_mode)
         perm_ok = config.IS_WIN or mode == 0o600
-        report(True, ".env present" + ("" if config.IS_WIN else f" (mode {mode:o}, should be 600)"))
+        report(True, ".env present" + ("" if config.IS_WIN else f" (mode {mode:o}{'' if perm_ok else ', should be 600'})"))
         if not perm_ok: report(False, ".env is not mode 600", f"chmod 600 {config.ENV_PATH}", warn=True)
-        report(bool(env.get("ZOTERO_API_KEY")), "ZOTERO_API_KEY set",
+        bad = config.cred_problems(env)                                    # a copied .env.example still holds the placeholder text: not "set"
+        report("ZOTERO_API_KEY" not in bad, "ZOTERO_API_KEY " + bad.get("ZOTERO_API_KEY", "set"),
                "create one at https://www.zotero.org/settings/keys (personal library read/write + file access) and put ZOTERO_API_KEY=... in .env")
-        report(bool(env.get("ZOTERO_LIBRARY_ID")), "ZOTERO_LIBRARY_ID set", "your user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env")
+        report("ZOTERO_LIBRARY_ID" not in bad, "ZOTERO_LIBRARY_ID " + bad.get("ZOTERO_LIBRARY_ID", "set"),
+               "your numeric user id is shown on https://www.zotero.org/settings/keys; put ZOTERO_LIBRARY_ID=... in .env")
     else:
         report(False, ".env missing", "cp .env.example .env (then chmod 600 .env on Linux/macOS) and fill ZOTERO_API_KEY / ZOTERO_LIBRARY_ID; the data directory is auto-detected")
 
@@ -166,13 +168,22 @@ def service_checks(env, report):
     except Exception:
         report(False, "Zotero desktop not running (127.0.0.1:23119 unreachable)", "`zl.py add` needs it for the PDF; start Zotero. Ignore for dump / tidy / recheck", warn=True)
 
-    # 8. Web API key (never printed)
-    if env.get("ZOTERO_API_KEY") and env.get("ZOTERO_LIBRARY_ID"):
+    # 8. Web API key (never printed); with a usable key but no usable id, the API says which user the key belongs to
+    bad = config.cred_problems(env)
+    hdr = {"Zotero-API-Key": env.get("ZOTERO_API_KEY", ""), "Zotero-API-Version": "3", "User-Agent": UA_LOCAL}
+    if "ZOTERO_API_KEY" not in bad and "ZOTERO_LIBRARY_ID" in bad:
         try:
-            req = urllib.request.Request(f"https://api.zotero.org/users/{config.LIBRARY_ID}/items?limit=1&format=keys",
-                                         headers={"Zotero-API-Key": env["ZOTERO_API_KEY"], "Zotero-API-Version": "3", "User-Agent": UA_LOCAL})
+            js = json.loads(urllib.request.urlopen(urllib.request.Request("https://api.zotero.org/keys/current", headers=hdr), timeout=15).read())
+            report(True, f"the API key belongs to user id {js.get('userID')} — put ZOTERO_LIBRARY_ID={js.get('userID')} in .env", warn=True)
+        except urllib.error.HTTPError as e:
+            report(False, f"Web API returned {e.code} for the key", "403 = key invalid (create one at https://www.zotero.org/settings/keys)")
+        except Exception as e:
+            report(False, f"Web API unreachable: {e}", "network problem, see above")
+    elif not bad:
+        try:
+            req = urllib.request.Request(f"https://api.zotero.org/users/{env['ZOTERO_LIBRARY_ID']}/items?limit=1&format=keys", headers=hdr)
             r = urllib.request.urlopen(req, timeout=15)
-            report(True, f"Web API key works (library {config.LIBRARY_ID}, server version {r.headers.get('Last-Modified-Version')})")
+            report(True, f"Web API key works (library {env['ZOTERO_LIBRARY_ID']}, server version {r.headers.get('Last-Modified-Version')})")
             from . import taxonomy as tx, zapi
             have, _ = zapi.remote_collections(env); missing = [c for c in tx.COLLECTIONS if c not in have]
             report(not missing, "the taxonomy's collections exist in the library" if not missing else f"collections from taxonomy.toml missing in the library: {', '.join(missing)}",

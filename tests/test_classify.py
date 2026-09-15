@@ -25,13 +25,17 @@ class Patterns(unittest.TestCase):
         for c in tx.COLLECTION_RULES:
             for p in c.get("patterns", []) + c.get("title_patterns", []) + c.get("boundary_patterns", []) + c.get("not_in_title", []): _rx(p)
 
-    def test_rules_only_reference_known_tags(self):
-        known = set(tx.RULES)
+    def test_rules_only_reference_known_tags_and_families(self):
+        """The keys classify.py reads: excludes / excluded_by / weak_with / implies / requires name tags, strip / head_only name
+        families, boundary_with a collection — a typo there would only surface as a KeyError on a real paper."""
+        known, fams = set(tx.RULES), set(tx.FAMILIES)
         for c in tx.COLLECTION_RULES:
-            self.assertTrue(set(c.get("requires", [])) <= known, c["name"])
+            self.assertTrue(set(c.get("requires", [])) <= known, c["name"]); self.assertTrue(set(c.get("strip", [])) <= fams, c["name"])
+            if c.get("boundary_with"): self.assertIn(c["boundary_with"], tx.COLLECTIONS, c["name"])
         for tag, r in tx.RULES.items():
-            for key in ("implies", "suppresses", "requires"):
-                self.assertTrue(set(r.get(key, [])) <= known, f"{tag}.{key}")
+            for key in ("implies", "excluded_by", "weak_with"): self.assertTrue(set(r.get(key, [])) <= known, f"{tag}.{key}")
+            self.assertTrue({x["tag"] if isinstance(x, dict) else x for x in r.get("excludes", [])} <= known, f"{tag}.excludes")
+            for key in ("strip", "head_only"): self.assertTrue(set(r.get(key, [])) <= fams, f"{tag}.{key}")
 
 
 class Rules(unittest.TestCase):
@@ -104,6 +108,15 @@ class Rules(unittest.TestCase):
         sg = llm.suggest("DexVLA", ABSTRACT, BODY, cfg=dead)
         self.assertEqual(sg["sure"], classify.suggest("DexVLA", ABSTRACT, BODY)["sure"])
         self.assertEqual([f for f in sg["flags"] if f.startswith("rules only")], ["rules only: Ollama is not running at http://127.0.0.1:1 (start it, or set ZC_LLM=agent / off in .env)"])
+
+    def test_a_pdf_without_a_text_extractor_is_judged_from_the_abstract_and_says_so(self):
+        """`fetch` may download the PDF and still get no text (no pdftotext / pypdf): the flag depends on the text, not the file."""
+        from unittest import mock
+        from zotero_librarian import pipeline
+        m = dict(slug="x", title="DexVLA", abstract=ABSTRACT, pdf_src="https://arxiv.org/pdf/x")
+        with mock.patch.object(pipeline, "_text", return_value=""), mock.patch.object(llm, "settings", return_value=dict(AGENT, kind="off")):
+            self.assertTrue(any(f.startswith("no full text") for f in pipeline.suggest_for(m)["flags"]))
+            self.assertFalse(any(f.startswith("no full text") for f in pipeline.suggest_for(m, text=BODY)["flags"]))
 
     def test_check_tags_rejects_values_outside_the_vocabulary(self):
         with contextlib.redirect_stdout(io.StringIO()):                     # check_tags prints its warnings

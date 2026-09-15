@@ -194,31 +194,31 @@ def finish(c):
     S, fam_tags, maybe, flags, types = c["S"], c["fam_tags"], dict(c["maybe"]), list(c["flags"]), list(c["types"])
     evidence = {}
     all_sure = {t for ts in fam_tags.values() for t in ts}
-    cscore = {c["name"]: _collection_score(c, head_txt, body) for c in tx.COLLECTION_RULES}
-    def total(c):
-        h, b = cscore[c["name"]]; s = 3 * h
-        for pat, bonus in c.get("tag_bonus", {}).items():
+    cscore = {rule["name"]: _collection_score(rule, head_txt, body) for rule in tx.COLLECTION_RULES}   # `rule`: a [[collections]] entry; `c` stays the analyze() context
+    def total(rule):
+        h, b = cscore[rule["name"]]; s = 3 * h
+        for pat, bonus in rule.get("tag_bonus", {}).items():
             if any(re.fullmatch(pat.replace("*", ".*"), t) for t in all_sure): s += bonus
-        if c.get("title_patterns") and any(_rx(p).search(title) for p in c["title_patterns"]): s += 6
+        if rule.get("title_patterns") and any(_rx(p).search(title) for p in rule["title_patterns"]): s += 6
         return s
     coll = None; winner = None
     if c.get("lock_collection"):                                                # adjudicated tags must not move the paper (llm.merge)
         coll = c["lock_collection"]; winner = next(x for x in tx.COLLECTION_RULES if x["name"] == coll)
-    for c in () if coll else tx.COLLECTION_RULES:
-        if c.get("default"): continue
-        if any(t not in all_sure for t in c.get("requires", [])): continue
-        if c.get("not_in_title") and any(_rx(p).search(title) for p in c["not_in_title"]): continue
-        s = total(c); others = max((total(o) for o in tx.COLLECTION_RULES if o is not c and not o.get("default")), default=0)
-        ok = s >= c.get("min_score", 3) and (c.get("max_other") is None or others <= c["max_other"])
-        if not ok and c.get("body_fallback") and all(cscore[o["name"]][0] == 0 for o in tx.COLLECTION_RULES) and cscore[c["name"]][1] >= c["body_fallback"]:
-            ok = all(cscore[o["name"]][1] <= 3 for o in tx.COLLECTION_RULES if o is not c)      # thin abstract: let the body decide
-        if ok: coll, winner = c["name"], c; break
+    for rule in () if coll else tx.COLLECTION_RULES:
+        if rule.get("default"): continue
+        if any(t not in all_sure for t in rule.get("requires", [])): continue
+        if rule.get("not_in_title") and any(_rx(p).search(title) for p in rule["not_in_title"]): continue
+        s = total(rule); others = max((total(o) for o in tx.COLLECTION_RULES if o is not rule and not o.get("default")), default=0)
+        ok = s >= rule.get("min_score", 3) and (rule.get("max_other") is None or others <= rule["max_other"])
+        if not ok and rule.get("body_fallback") and all(cscore[o["name"]][0] == 0 for o in tx.COLLECTION_RULES) and cscore[rule["name"]][1] >= rule["body_fallback"]:
+            ok = all(cscore[o["name"]][1] <= 3 for o in tx.COLLECTION_RULES if o is not rule)   # thin abstract: let the body decide
+        if ok: coll, winner = rule["name"], rule; break
     if not coll:
-        coll = tx.DEFAULT_COLLECTION; winner = next(c for c in tx.COLLECTION_RULES if c["name"] == coll)
-        hits = [c["name"] for c in tx.COLLECTION_RULES if not c.get("default") and cscore[c["name"]][0]]
+        coll = tx.DEFAULT_COLLECTION; winner = next(x for x in tx.COLLECTION_RULES if x["name"] == coll)
+        hits = [x["name"] for x in tx.COLLECTION_RULES if not x.get("default") and cscore[x["name"]][0]]
         if hits: flags.append(f"BOUNDARY: default collection, but the abstract also matches {'/'.join(hits)} vocabulary — confirm the collection")
     if winner.get("boundary_with"):
-        other = next(c for c in tx.COLLECTION_RULES if c["name"] == winner["boundary_with"])
+        other = next(x for x in tx.COLLECTION_RULES if x["name"] == winner["boundary_with"])
         bp = other.get("boundary_patterns") or other.get("title_patterns") or other.get("patterns", [])
         if any(_rx(p).search(abstract) for p in bp) and all(t in all_sure for t in other.get("requires", [])):
             if winner.get("boundary_pause", True): flags.append(f"BOUNDARY: {coll} vs {other['name']} — the abstract also matches {other['name']} vocabulary; confirm the collection")
