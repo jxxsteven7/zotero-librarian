@@ -34,6 +34,22 @@ class Version(unittest.TestCase):
         self.assertEqual(re.search(r"^- \*\*v([\d.]+)\*\*", log, re.M).group(1), __version__)
 
 
+class Commits(unittest.TestCase):
+    def test_check_commits_rejects_agent_attribution(self):
+        """AGENTS.md: no agent attribution in a commit — tools/check_commits.py fails on such a line, author or committer."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("check_commits", os.path.join(config.ROOT, "tools", "check_commits.py"))
+        cc = importlib.util.module_from_spec(spec); spec.loader.exec_module(cc)
+        me = "Jane Doe <jane@example.org>\nJane Doe <jane@example.org>"
+        self.assertIsNone(cc.attribution("v0.9: add --from-file for a list of links\n", me))
+        self.assertIsNone(cc.attribution("Fix\n\nCo-Authored-By: Jane Doe <jane@example.org>\n", me))
+        for bad in ("Fix\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\n",
+                    "Fix\n\nClaude-Session: https://claude.ai/code/session_x\n",
+                    "Fix\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"):
+            self.assertIsNotNone(cc.attribution(bad, me), bad)
+        self.assertIsNotNone(cc.attribution("Fix\n", "Codex <codex@openai.com>\nJane Doe <jane@example.org>"))
+
+
 class Taxonomy(unittest.TestCase):
     def test_four_collections_with_one_default(self):
         self.assertEqual(len(tx.COLLECTIONS), 4); self.assertEqual(sum(1 for c in tx.COLLECTION_RULES if c.get("default")), 1)

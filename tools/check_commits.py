@@ -5,12 +5,15 @@
 
 A commit that touches behaviour (zl.py, zotero_librarian/, taxonomy.toml, the skills) must be titled `vX.Y: ...`; such a
 title must come with `__version__ = "X.Y"` and a `**vX.Y**` entry in CHANGELOG.md; and only such a commit may change
-`__version__`. Each commit is checked against its own tree, so a push with v0.5 followed by v0.6 passes. Merge commits
-are skipped. Exit 1 with one line per violation."""
+`__version__`. No commit carries agent attribution: no `Co-Authored-By` naming an agent, no `Claude-Session` / "Generated
+with" line, no agent as author or committer. Each commit is checked against its own tree, so a push with v0.5 followed by
+v0.6 passes. Merge commits are skipped. Exit 1 with one line per violation."""
 import re, subprocess, sys
 
 INIT, CHANGELOG = "zotero_librarian/__init__.py", "CHANGELOG.md"
 BEHAVIOUR = ("zl.py", "zotero_librarian/", "taxonomy.toml", ".agents/skills/", ".claude/skills/")
+AGENTS = r"\b(claude|anthropic|codex|openai|chatgpt|gpt|copilot|kimi|gemini|cursor|devin|aider|windsurf)\b"
+ATTRIBUTION = re.compile(rf"^\s*(Co-Authored-By:.*{AGENTS}|Claude-Session:|.*Generated with.*{AGENTS}|.*🤖)", re.I | re.M)
 
 
 def git(*args):
@@ -27,11 +30,21 @@ def version_at(rev):
     return m.group(1) if m else None
 
 
+def attribution(message, who=""):
+    """The first agent-attribution line of a commit message (or an agent author / committer), else None."""
+    m = ATTRIBUTION.search(message)
+    if m: return m.group(0).strip()
+    m = re.search(AGENTS, who, re.I)
+    return f"author/committer {who.strip()}" if m else None
+
+
 def check(sha):
     title = git("log", "-1", "--format=%s", sha).strip()
     ver, prev = version_at(sha), version_at(sha + "^")
     m = re.match(r"v(\d+\.\d+):", title)
     problems = []
+    a = attribution(git("log", "-1", "--format=%B", sha), git("log", "-1", "--format=%an <%ae>%n%cn <%ce>", sha))
+    if a: problems.append(f"agent attribution: {a!r}")
     if m:
         want = m.group(1)
         if ver != want: problems.append(f"title says v{want} but {INIT} has __version__ = {ver!r}")

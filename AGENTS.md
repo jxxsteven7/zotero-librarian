@@ -43,7 +43,9 @@ logs/                 audit log written by the scripts (local, not in git)
 ## Repository rules
 
 - English everywhere. **A commit message is one line** (imperative, what changed); a body only when the why is not obvious,
-  two lines at most. Never commit `.env`, `cache/`, `inbox/`, `logs/`.
+  two lines at most. **No agent attribution in a commit**: no `Co-Authored-By` naming an agent, no `Claude-Session` or
+  "Generated with" line, no agent as author or committer — the person who made the change is the only author. Never commit
+  `.env`, `cache/`, `inbox/`, `logs/`.
 - **Versions are mechanical**: a commit that touches behaviour (`zl.py`, `zotero_librarian/`, `taxonomy.toml`, the skills)
   is titled `vX.Y: <what changed>`, bumps `__version__` (`zotero_librarian/__init__.py`) and adds that line to
   `CHANGELOG.md` — Y +1 every time, fixes included; docs / tests / tools / CI-only commits are plain. The maintainer bumps X
