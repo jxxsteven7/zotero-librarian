@@ -99,7 +99,7 @@ def arxiv_batch(ids):
 def meta_arxiv(aid):
     try:
         m = meta_arxiv_api(aid)
-    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+    except OSError as e:                                        # HTTPError (429 / 503), URLError and a socket timeout are all OSError
         print(f"  ! arXiv API {getattr(e, 'code', e)}; scraping the abs page instead", file=sys.stderr)
         m = meta_arxiv_html(aid)
     cat = m["category"]

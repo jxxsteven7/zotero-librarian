@@ -1,5 +1,5 @@
 """Has an arXiv preprint been published? arXiv comment -> PDF first-page statement -> Semantic Scholar -> Crossref -> project page (source priority per AGENTS.md)."""
-import html, json, re, time, urllib.error, urllib.parse
+import html, json, re, sys, time, urllib.parse
 
 from .http import http, get_text, UA_LOCAL
 from .pdf import project_urls
@@ -15,14 +15,16 @@ def s2_venues(arxiv_ids):
     ids = [a for a in dict.fromkeys(arxiv_ids) if a]
     for i in range(0, len(ids), 200):
         chunk = ids[i:i + 200]; body = json.dumps({"ids": ["arXiv:" + a for a in chunk]}).encode()
+        js = None
         for attempt in range(6):
             try:
                 st, h, raw = http("https://api.semanticscholar.org/graph/v1/paper/batch?fields=title,venue,publicationVenue,externalIds,year",
                                   data=body, headers={"Content-Type": "application/json"}, method="POST", ua=UA_LOCAL)
                 js = json.loads(raw.decode()); break
-            except urllib.error.HTTPError as e:
-                if e.code != 429 or attempt == 5: raise
-                time.sleep(4 * (attempt + 1))
+            except OSError as e:                                        # 400 for ids S2 doesn't know yet (a day-old preprint), 429, timeouts
+                if getattr(e, "code", None) == 429 and attempt < 5: time.sleep(4 * (attempt + 1)); continue
+                print(f"  ! Semantic Scholar {getattr(e, 'code', e)}; venue lookup continues without it", file=sys.stderr); break
+        if not js: continue
         for a, pp in zip(chunk, js):
             if not pp: continue
             pv = pp.get("publicationVenue") or {}; name = pv.get("name") or pp.get("venue") or ""

@@ -101,9 +101,7 @@ def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
     got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
     info = verify(got["key"], wait=wait) if wait else None
-    row = report_row(got, sg, info)
-    print("\n" + row + "\n")
-    return got, row
+    return got, report_row(got, sg, info)                                  # printed once, in the caller's table
 
 
 def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, dry_run=False,
