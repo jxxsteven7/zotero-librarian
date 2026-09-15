@@ -59,6 +59,12 @@ def decide(sg, collection=None, tags=None, drop=None, also=None, first=False):
     return coll, (also or sg["also"]), tags
 
 
+def with_status(tags, have=()):
+    """Every item carries exactly one reading status: add the default unless the item or the new tags already have one."""
+    if any(t.startswith("status:") for t in list(have) + list(tags)): return tags
+    return tx.sort_tags(list(tags) + ["status:" + tx.DEFAULT_STATUS])
+
+
 def paused(sg): return any(f.startswith("BOUNDARY") for f in sg["flags"])
 
 
@@ -222,7 +228,7 @@ def plan_item(r, confirm=None):
     elif not cur_url and m: fields["url"] = m["url"]
     if not r.get("shortTitle"): fields["shortTitle"] = short_title(title)
     coll, also, tags = decide(sg)
-    have = set(r["tags"]); add_tags = [t for t in tags if t not in have]
+    have = set(r["tags"]); add_tags = [t for t in with_status(tags, have) if t not in have]   # the connector adds the status for `add`; here we must
     colls = [c for c in ([coll] + ([also] if also else [])) if c not in r["collections"]]
     return dict(key=r["key"], old_title=r["title"], title=new_title, fields=fields, tags=add_tags, collections=colls, sg=sg, src=src,
                 notes=notes, abstract=abstract, has_text=bool(text))
@@ -273,10 +279,14 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         have = {t["tag"] for t in d["tags"]}; new_tags = [t for t in p["tags"] if t not in have]
         if new_tags: patch["tags"] = d["tags"] + [{"tag": t, "type": 0} for t in new_tags]
         if patch: zapi.patch(env, p["key"], it["version"], patch)
+        done = ["+" + ", ".join(new_tags)] if new_tags else []
+        if [k for k in patch if k not in ("tags", "collections")]: done.append("fields " + ", ".join(k for k in patch if k not in ("tags", "collections")))
+        if want_c: done.append("collection " + ", ".join(c for c in [coll, sg["also"]] if c))
+        print("  written   : " + (" | ".join(done) or "nothing — already as planned") + " <- Web API")
         zapi.log(f"## {date.today()} — tidy", f"- {p['key']} | {p['title']} | +collection: {', '.join(c for c in [coll, sg['also']] if c)} | +tags: {', '.join(new_tags)} | fields: {', '.join(k for k in patch if k not in ('tags', 'collections'))} | {p['src']}")
-        info = verify(p["key"], wait=wait, quiet=True) if wait else None
+        info = verify(p["key"], wait=wait, expect=dict(collection=coll, tags=p["tags"], url=p["fields"].get("url"), short=p["fields"].get("shortTitle"))) if wait else None
         got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
         row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))
-        print("\n" + table.render(COLS, [row]) + "\n"); out.append(row)
-    print("\n" + table.render(COLS, out))
+        out.append(row); print("")
+    if out: print(table.render(COLS, out))
     return out

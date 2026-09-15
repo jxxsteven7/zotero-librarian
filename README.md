@@ -17,8 +17,6 @@ paper into the right collection, tags it from a controlled vocabulary **with the
 saves through your running Zotero, verifies the cloud sync, logs — and prints one table. A local model (or, without a
 GPU, the agent) settles only the borderline tags. You read the paper yourself.
 
-![zl.py add on a fresh arXiv paper: card, evidence-backed tags, save, sync check, one table](docs/demo-add.gif)
-
 The library it keeps: four collections, `[date] [venue] Title` in the list, `family:value` tags on every item and in the
 tag selector, project page in the URL field — the same on every machine that syncs.
 
@@ -57,6 +55,17 @@ if you want your titles left alone). Step by step: [docs/first-run.md](docs/firs
 | `/discover` · `zl.py discover` | Last N days of arXiv / HF papers scored against *your* tags. Nothing saved. |
 | `/refs` · `zl.py refs <paper>` | References and citations (Semantic Scholar) split into "have" / "missing"; `--library` maps citations among your own papers. |
 | `zl.py recheck` · `tag` · `untag` · `set` | Re-verify venues and dates; single-item edits. |
+
+One recording per skill, unedited (`docs/demo.sh` re-records them):
+
+`/download` — a link in, a filed paper out: card, evidence-backed tags, save through Zotero, sync check, one table.
+
+![zl.py add](docs/demo-add.gif)
+
+`/tidy` — a PDF dropped into Zotero by hand (title and PDF, nothing else) gets its metadata, title, project page, tags,
+collection and reading status:
+
+![zl.py tidy](docs/demo-tidy.gif)
 
 `/discover` — what appeared on arXiv in the last days that matches your tags; papers already in the library are left out:
 
