@@ -10,14 +10,14 @@ finish it. With ZC_LLM=agent the same pause carries the ADJUDICATE block; the ag
 import os, re, sys
 from datetime import date
 
-from . import classify, connector, fetch, llm, localdb, taxonomy as tx, zapi
+from . import classify, connector, fetch, llm, localdb, table, taxonomy as tx, zapi
 from .config import DATA_DIR, INBOX
 from .pdf import pdf_text, project_urls, project_url_score
 from .published import lookup_published
 from .sources import ARXIV_ID, meta_arxiv, meta_crossref, meta_page
 from .titles import fmt_date, short_title, split_prefix
 
-HEADER = "| key | title | collection | tags | PDF | notes |\n|---|---|---|---|---|---|"
+COLS = ["key", "title", "collection", "tags", "PDF", "notes"]
 
 
 def _text(slug):
@@ -111,8 +111,8 @@ def report_row(got, sg, info, note_extra=""):
     if "!" in (got.get("date_src") or "") or "!" in (got.get("venue_src") or ""): notes.append(f"date/venue flagged: {got.get('date_src')} / {got.get('venue_src')}")
     if note_extra: notes.append(note_extra)
     sync = "ok" if info else "unconfirmed"
-    return (f"| `{got['key']}` | {got['title']} | {got['collection']}" + (f" + {got['also']}" if got.get("also") else "") +
-            f" | {', '.join(t for t in got['tags_written'] if t not in tx.KEEP_BARE_TAGS)} | {'yes' if got['pdf_ok'] else 'no'} | sync {sync}. " + ("; ".join(notes) or "—") + " |")
+    return [f"`{got['key']}`", got["title"], got["collection"] + (f" + {got['also']}" if got.get("also") else ""),
+            ", ".join(t for t in got["tags_written"] if t not in tx.KEEP_BARE_TAGS), "yes" if got["pdf_ok"] else "no", f"sync {sync}. " + ("; ".join(notes) or "—")]
 
 
 def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150):
@@ -130,21 +130,21 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
     for link in links:
         try: m = fetch.fetch_one(link)
         except Exception as e:
-            print(f"=== {link}\n  x {e}\n"); rows.append(f"| — | {link} | — | — | — | x {str(e)[:120]} |"); continue
+            print(f"=== {link}\n  x {e}\n"); rows.append(["—", link, "—", "—", "—", f"x {str(e)[:120]}"]); continue
         brief(m); sg = suggest_for(m, confirm=confirm); judgement(sg)
         if m.get("duplicate") and not force:
             d = m["duplicate"]; print("  -> duplicate, skipped (--force to add anyway)\n"); fetch.clear(m["slug"])
-            rows.append(f"| `{d['key']}` | {d['title']} | — | — | — | duplicate, already in the library, skipped |"); continue
+            rows.append([f"`{d['key']}`", d["title"], "—", "—", "—", "duplicate, already in the library, skipped"]); continue
         coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
         if dry_run:
             print(f"  [dry-run] would save: {coll}" + (f" + {also_}" if also_ else "") + f" | {', '.join(tags_)}\n"); continue
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
             why = pause_cmd(f"python3 zl.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
-            rows.append(f"| PAUSE | {m['proposed_title']} | {coll}{'?' if need_coll else ''} | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | {why} |"); continue
+            rows.append(["PAUSE", m["proposed_title"], coll + ("?" if need_coll else ""), ", ".join(tags_), "yes" if m.get("pdf_src") else "no", why]); continue
         got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
         rows.append(row)
-    print("\n" + HEADER + "\n" + "\n".join(rows))
+    print("\n" + table.render(COLS, rows))
     return rows
 
 
@@ -155,7 +155,7 @@ def save(slug, collection=None, tags=None, drop=None, also=None, first=False, fo
     if confirm is None and llm.pending(sg): print(classify.fmt(sg)); print(llm.fmt_llm(sg)); raise SystemExit(f"  x ZC_LLM=agent: answer the ADJUDICATE block with --confirm <tags>|none")
     coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
     got, row = finish(slug, m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
-    print("\n" + HEADER + "\n" + row)
+    print("\n" + table.render(COLS, [row]))
     return got
 
 
@@ -258,7 +258,7 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         need_coll, need_adj = not collection and paused(sg), confirm is None and llm.pending(sg)
         if need_coll or need_adj:
             why = pause_cmd(f"python3 zl.py tidy --only {p['key']}", sg, coll, sg["also"], need_coll, need_adj)
-            out.append(f"| PAUSE | {p['title']} | {coll}{'?' if need_coll else ''} | {', '.join(p['tags'])} | {'yes' if r['pdfs'] else 'no'} | {why} |"); continue
+            out.append(["PAUSE", p["title"], coll + ("?" if need_coll else ""), ", ".join(p["tags"]), "yes" if r["pdfs"] else "no", why]); continue
         if not write:
             print(f"  [dry-run] would write: {coll} | +{', '.join(p['tags'])} | fields {list(p['fields'])}\n"); continue
         st, it = zapi.get_item(env, p["key"])
@@ -276,6 +276,6 @@ def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=Non
         info = verify(p["key"], wait=wait, quiet=True) if wait else None
         got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
         row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))
-        print("\n" + row + "\n"); out.append(row)
-    print("\n" + HEADER + "\n" + "\n".join(out))
+        print("\n" + table.render(COLS, [row]) + "\n"); out.append(row)
+    print("\n" + table.render(COLS, out))
     return out

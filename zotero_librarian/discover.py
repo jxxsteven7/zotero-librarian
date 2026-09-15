@@ -9,7 +9,7 @@ import json, re, sys, time, urllib.error, urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 
-from . import classify, localdb
+from . import classify, localdb, table
 from .http import get_text, UA_LOCAL
 from .sources import ARXIV_ID
 from .titles import clean_title, norm_title, ws
@@ -102,8 +102,9 @@ def run(days=7, cats=("cs.RO",), query=None, tags=(), require_all=False, sources
     rows.sort(key=lambda r: (-r[0], -r[1], -r[2], r[3]["date"]), reverse=False)
     print(f"{len(cands)} candidates from {', '.join(sources)} ({', '.join(cats)}, last {days} days); {len(rows)} after filters"
           + (f"; wanted tags: {', '.join(want)}" if want else "") + (f"; query /{query}/" if query else ""))
-    print("\n| # | date | arXiv | title | collection | tags | src |\n|---|---|---|---|---|---|---|")
-    for i, (nh, ng, up, p, got, coll) in enumerate(rows, 1):
-        print(f"| {i} | {p['date']} | [{p['id']}](https://arxiv.org/abs/{p['id']}) | {p['title'][:90]} | {coll} | {', '.join(got)} | {p['source']}{' ▲' + str(up) if up else ''} |")
+    link = (lambda i: i) if table.HUMAN else (lambda i: f"[{i}](https://arxiv.org/abs/{i})")
+    out = [[i, p["date"], link(p["id"]), p["title"][:90], coll, ", ".join(got), p["source"] + (" ▲" + str(up) if up else "")]
+           for i, (nh, ng, up, p, got, coll) in enumerate(rows, 1)]
+    print("\n" + table.render(["#", "date", "arXiv", "title", "collection", "tags", "src"], out))
     print("\nAdd one with: python3 zl.py add <arXiv id>")
     return rows

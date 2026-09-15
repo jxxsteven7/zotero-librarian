@@ -17,7 +17,7 @@ paper into the right collection, tags it from a controlled vocabulary **with the
 saves through your running Zotero, verifies the cloud sync, logs — and prints one table. A local model (or, without a
 GPU, the agent) settles only the borderline tags. You read the paper yourself.
 
-![zl.py add on a fresh arXiv paper: card, evidence-backed tags, save, sync check, one table](docs/demo.gif)
+![zl.py add on a fresh arXiv paper: card, evidence-backed tags, save, sync check, one table](docs/demo-add.gif)
 
 <!-- zotero-screenshot: the organized library (collections, [date] [venue] titles, tag pane) goes here -->
 
@@ -54,6 +54,15 @@ if you want your titles left alone). Step by step: [docs/first-run.md](docs/firs
 | `/discover` · `zl.py discover` | Last N days of arXiv / HF papers scored against *your* tags. Nothing saved. |
 | `/refs` · `zl.py refs <paper>` | References and citations (Semantic Scholar) split into "have" / "missing"; `--library` maps citations among your own papers. |
 | `zl.py recheck` · `tag` · `untag` · `set` | Re-verify venues and dates; single-item edits. |
+
+<details><summary><code>zl.py discover</code> — what appeared on arXiv this week that matches my tags</summary>
+
+![zl.py discover](docs/demo-discover.gif)
+</details>
+<details><summary><code>zl.py refs</code> — what a paper builds on and who builds on it, split by what the library already has</summary>
+
+![zl.py refs](docs/demo-refs.gif)
+</details>
 
 Conventions: titles `[YYYY-MMDD] [Venue] Title` (v1 date, venue abbreviation, `[arXiv]` until accepted); URL field =
 project page; tags `family:value` from `taxonomy.toml`, one reading status per item; PDFs saved by Zotero itself so

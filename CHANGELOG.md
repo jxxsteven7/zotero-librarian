@@ -2,6 +2,8 @@
 
 One line per version. Minor versions (`vX.Y`) are one feature or merged PR each; major versions are tagged by the maintainer.
 
+- **v0.8** (2026-09-15) — one table for two readers (`table.py`): markdown when piped to an agent, aligned columns cut to
+  the terminal for a human; used by `add` / `tidy` / `discover` / `refs`. Three README demos recorded by `docs/demo.sh`.
 - **v0.7** (2026-09-15) — readable terminal output: the card prints before the model runs, evidence snippets fit the
   terminal width and keep the matched words, `saved` / `sync` are one line each (details only when the server differs),
   the model's disagreements are one flag, table notes name candidates only. README demo GIF (`docs/demo.sh` records it).

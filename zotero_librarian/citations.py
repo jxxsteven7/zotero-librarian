@@ -7,7 +7,7 @@ Semantic Scholar's public API allows ~1 request/s without a key; set S2_API_KEY 
 in cache/s2/ so repeated runs are free."""
 import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
-from . import localdb
+from . import localdb, table
 from .config import CACHE, load_env
 from .http import UA_LOCAL
 from .sources import ARXIV_ID, classify_link
@@ -92,9 +92,11 @@ def one(ident, top=15):
         for p, r in sorted(inlib, key=lambda pr: pr[0].get("year") or 0):
             print(f"  in library  `{r['key']}` {r['title'][:80]}")
         print(f"  top {min(top, len(others))} not in the library (by citation count):")
+        rows = []
         for p in others[:top]:
             ext = p.get("externalIds") or {}; link = ("arXiv:" + ext["ArXiv"]) if ext.get("ArXiv") else ("DOI:" + ext["DOI"] if ext.get("DOI") else "")
-            print(f"    {p.get('year') or '????'} | {p.get('citationCount') or 0:>5} cites | {p['title'][:80]} | {p.get('venue') or ''} | {link}")
+            rows.append([p.get("year") or "????", p.get("citationCount") or 0, p["title"][:80], p.get("venue") or "", link])
+        print(table.render(["year", "cites", "title", "venue", "id"], rows))
     print("\nAdd one with: python3 zl.py add <arXiv id or DOI>")
 
 
