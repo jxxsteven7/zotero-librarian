@@ -33,7 +33,7 @@ def write_launcher():
     p = launcher_path(); os.makedirs(os.path.dirname(p), exist_ok=True)
     py, entry = sys.executable, os.path.join(ROOT, "zl.py")
     if config.IS_WIN:
-        with open(p, "w", encoding="utf-8", newline="\r\n") as f: f.write(f'@echo off\r\n"{py}" "{entry}" %*\r\n')
+        with open(p, "w", encoding="utf-8", newline="") as f: f.write(f'@echo off\r\n"{py}" "{entry}" %*\r\n')   # newline="" keeps the explicit CRLF as written (newline="\r\n" would make it \r\r\n)
     else:
         with open(p, "w", encoding="utf-8") as f: f.write(f'#!/bin/sh\nexec "{py}" "{entry}" "$@"\n')
         os.chmod(p, 0o755)

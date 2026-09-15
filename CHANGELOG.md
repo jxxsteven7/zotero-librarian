@@ -2,6 +2,10 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v0.15** (2026-09-15) — Windows test run. `install` wrote the `zl.cmd` launcher with doubled carriage returns (CR CR LF: the
+  file was opened with CRLF newline translation on top of an explicit CRLF); cmd.exe tolerated it, the file is now plain CRLF. Verified on
+  Windows 11 / Python 3.12: `setup`, the tests, `dump` / `fetch` / `discover` / `refs` / `recheck` against a running Zotero, `install` /
+  `--remove`, `setup.sh` from Git Bash.
 - **v0.14** (2026-09-15) — the Quick start (both READMEs) and `docs/first-run.md` open with the two prerequisites — Zotero
   signed in to sync, an API key with *Allow library access* + *Allow write access*, the user ID shown next to it — instead of
   a comment inside the code block; `setup` and `.env.example` name those options (there is no "file access" option to tick)
