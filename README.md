@@ -2,14 +2,12 @@
 
 **Your coding agent files papers into Zotero — the scripts do the judging, the agent only runs them.**
 
-[![Claude Code](https://img.shields.io/badge/Claude_Code-%2Fdownload-D97757?style=flat-square&logo=anthropic&logoColor=white)](#works-with)
-[![Codex](https://img.shields.io/badge/Codex-%24download-000000?style=flat-square)](#works-with)
-[![Kimi Code CLI](https://img.shields.io/badge/Kimi_Code_CLI-%2Fskill%3Adownload-1E6FFF?style=flat-square&logo=kimi&logoColor=white)](#works-with)
-[![Ollama](https://img.shields.io/badge/adjudicator-Ollama_%7C_agent_%7C_off-2B2B2B?style=flat-square&logo=ollama&logoColor=white)](docs/classifier.md)
-[![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org)
-[![Python](https://img.shields.io/badge/Python-3.11%2B_stdlib_only-3776AB?style=flat-square&logo=python&logoColor=white)](#install)
-[![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#install)
-[![CI](https://img.shields.io/github/actions/workflow/status/jxxsteven7/zotero-librarian/ci.yml?style=flat-square&label=ci)](https://github.com/jxxsteven7/zotero-librarian/actions/workflows/ci.yml)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-download-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/setup)
+[![Codex](https://img.shields.io/badge/Codex-download-000000?style=flat-square)](https://developers.openai.com/codex/cli/)
+[![Kimi Code CLI](https://img.shields.io/badge/Kimi_Code_CLI-download-1E6FFF?style=flat-square&logo=kimi&logoColor=white)](https://www.kimi.com/code)
+[![Ollama](https://img.shields.io/badge/Ollama-download-2B2B2B?style=flat-square&logo=ollama&logoColor=white)](https://ollama.com/download)<br>
+[![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org/download/)
+[![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#quick-start)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 Give it a link. It fetches metadata and PDF, checks for duplicates, finds the venue and the project page, files the
