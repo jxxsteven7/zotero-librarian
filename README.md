@@ -19,7 +19,10 @@ GPU, the agent) settles only the borderline tags. You read the paper yourself.
 
 ![zl.py add on a fresh arXiv paper: card, evidence-backed tags, save, sync check, one table](docs/demo-add.gif)
 
-<!-- zotero-screenshot: the organized library (collections, [date] [venue] titles, tag pane) goes here -->
+The library it keeps: four collections, `[date] [venue] Title` in the list, `family:value` tags on every item and in the
+tag selector, project page in the URL field — the same on every machine that syncs.
+
+![The organized library in Zotero](docs/library.png)
 
 ## Why
 
