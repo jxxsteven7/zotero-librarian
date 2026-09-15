@@ -1,6 +1,4 @@
-# zotero-librarian
-
-**Your coding agent files papers into Zotero — the scripts do the judging, the agent only runs them.**
+![zotero-librarian: your coding agent files papers into Zotero](docs/banner.png)
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-download-D97757?style=flat-square&logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/setup)
 [![Codex](https://img.shields.io/badge/Codex-download-000000?style=flat-square)](https://developers.openai.com/codex/cli/)
@@ -9,6 +7,8 @@
 [![Zotero](https://img.shields.io/badge/Zotero-7%2B-CC2936?style=flat-square&logo=zotero&logoColor=white)](https://www.zotero.org/download/)
 [![Platforms](https://img.shields.io/badge/Ubuntu_%C2%B7_macOS_%C2%B7_Windows-supported-4C8C2B?style=flat-square&logo=linux&logoColor=white)](#quick-start)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+
+**Your coding agent files papers into Zotero — the scripts do the judging, the agent only runs them.**
 
 Give it a link. It fetches metadata and PDF, checks for duplicates, finds the venue and the project page, files the
 paper into the right collection, tags it from a controlled vocabulary **with the sentence that justifies each tag**,
@@ -112,7 +112,7 @@ yours as a PR (`taxonomies/<field>.toml`, with your eval numbers) rather than wi
 zl.py  taxonomy.toml  AGENTS.md          entry point · your collections, tags, rules, venues · the agent's rules (CLAUDE.md imports it)
 zotero_librarian/                        fetch / classify / llm / pipeline / connector / zapi / ... (stdlib only)
 .agents/skills/  .claude/skills/         download · tidy · discover · refs  (source · verbatim copy)
-docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, taxonomy.md, notero.md · eval_classify.py, check_commits.py, fix_pdf_names.js · one line per version
+docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, taxonomy.md, notero.md · eval_classify.py, check_commits.py, fix_pdf_names.js, banner.py · one line per version
 tests/  .github/workflows/ci.yml         unit tests on synthetic papers; CI runs them + `zl.py setup --offline` on Ubuntu, macOS, Windows
 .env  cache/  inbox/  logs/              per machine, git-ignored
 ```
