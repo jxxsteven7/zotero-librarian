@@ -90,6 +90,10 @@ overrides a rule or the collection. On the author's 129 hand-tagged papers: rule
 rules + qwen3.5:9b 0.87 / 0.81, 127 / 129 collections. Edit the taxonomy for your field, measure with
 `tools/eval_classify.py`. Details, all numbers and the config: [docs/classifier.md](docs/classifier.md).
 
+The shipped `taxonomy.toml` is robot learning — the maintainer's field, kept small and measured against a real library.
+The code knows nothing about robots: another field is the same file with other collections, values and venues. Send
+yours as a PR (`taxonomies/<field>.toml`, with your eval numbers) rather than widening this one.
+
 ## Layout
 
 ```
