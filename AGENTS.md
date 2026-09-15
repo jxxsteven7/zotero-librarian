@@ -22,7 +22,8 @@ zotero_librarian/              package, standard library only, Ubuntu / macOS / 
 .agents/skills/             the skills download / tidy / discover / refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
 .claude/skills/             identical copy for Claude Code (`/download`); edit .agents/skills and run `zl.py setup --sync-skills`
 proposals/proposal.py       approval-mode batch data (RETAG / UNTAG / UNCOLLECT / P)
-docs/notero.md              Notion mirror (Notero) configuration
+docs/classifier.md docs/notero.md   how classification works (taxonomy format, adjudicator, eval numbers); Notion mirror (Notero) configuration
+CONTRIBUTING.md CHANGELOG.md   issue / PR procedure; one line per version
 logs/zotero-organize.log.md audit log, appended by the scripts (local to the machine, not in git)
 tools/                      eval_classify.py (measure the classifier on the library), fix_pdf_names.js (Zotero Run JavaScript)
 inbox/  cache/              staged downloads; library snapshot, full-text and API caches (not in git)
@@ -127,4 +128,4 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
 - Changing the classifier: edit `taxonomy.toml`, run `python3 tools/eval_classify.py` (rules) and `--llm` (with the local model) and keep
   precision from dropping; the numbers are in the README.
 
-Notion mirror: `docs/notero.md`.
+Classifier details: `docs/classifier.md`. Notion mirror: `docs/notero.md`.
