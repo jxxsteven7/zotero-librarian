@@ -10,7 +10,7 @@ UNTAG drops a wrongly assigned tag from one item; UNCOLLECT moves an item out of
 """
 import argparse, datetime, importlib.util, json, sys
 
-from .config import LOG, PROPOSAL_PY, connect_ro
+from .config import LOG, PROPOSAL_PY, append_log, connect_ro
 from .taxonomy import COLLECTIONS as ROOTS, FAMILIES
 from .zapi import req, env_or_die, remote_collections
 
@@ -108,7 +108,7 @@ def remote_state(env):
 
 
 def log(lines):
-    with open(LOG, "a", encoding="utf-8") as f: f.write("\n".join(lines) + "\n")
+    append_log(*lines)
 
 
 def run(argv):

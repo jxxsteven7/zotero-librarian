@@ -11,9 +11,9 @@
 `python3 zc.py proposal` renders proposals/proposal.md (not in git) for the user to review; `zc.py apply --dry-run / --plan / --apply` executes.
 The first full pass over this library (2026-09-11, 122 items) has been applied; its data lives in git history and the log.
 """
-from zotero_claude import localdb
-from zotero_claude.config import PROPOSAL_MD
-from zotero_claude.taxonomy import FAMILIES
+from zotero_librarian import localdb
+from zotero_librarian.config import PROPOSAL_MD
+from zotero_librarian.taxonomy import FAMILIES
 
 rows = {r["key"]: r for r in localdb.load()}
 

@@ -4,7 +4,7 @@ and only add; the remote `version` is the optimistic lock. The API key is never 
 import json, sys, time, urllib.error, urllib.request
 from datetime import date
 
-from .config import LOG, load_env
+from .config import append_log, load_env
 
 API = "https://api.zotero.org"
 
@@ -125,4 +125,4 @@ def set_fields(key, fields, why=""):
 
 def log(*lines):
     """Append to the audit log (logs/zotero-organize.log.md). The first line is usually a '## date — action' heading."""
-    with open(LOG, "a", encoding="utf-8") as f: f.write("\n" + "\n".join(lines) + "\n")
+    append_log(*lines)

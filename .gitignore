@@ -1,8 +1,9 @@
 # credentials
 .env
-# generated locally (library content, full texts, staged downloads) — never committed
+# generated locally (library content, full texts, staged downloads, audit log) — never committed
 cache/
 inbox/
+logs/
 proposals/proposal.md
 __pycache__/
 *.pyc

@@ -1,21 +1,21 @@
 """Subcommands of zc.py. Rules live in AGENTS.md, the taxonomy in taxonomy.toml. (On Windows, `python` instead of `python3`.)"""
 import argparse, sys
 
-from . import config   # noqa: F401 — forces UTF-8 stdout before anything prints (Windows pipes)
+from . import NAME, __version__, config   # noqa: F401 — config forces UTF-8 stdout before anything prints (Windows pipes)
 
 USAGE = """python3 zc.py <command> ...        Zotero library maintenance (rules: AGENTS.md, taxonomy: taxonomy.toml)
 
 Adding papers (the download skill)
-  add <link|PDF path>...   fetch -> classify (rules + local LLM) -> save via Zotero desktop -> verify on the server -> commit log -> report
+  add <link|PDF path>...   fetch -> classify (rules + local LLM) -> save via Zotero desktop -> verify on the server -> log -> report
         [--collection X] [--also Y] [--tags a,b] [--drop a,b] [--first] [--force] [--venue X] [--date YYYY-MM-DD]
-        [--url URL] [--short NAME] [--name TITLE] [--wait SECONDS (150)] [--no-commit] [--dry-run] [--confirm a,b|none]
+        [--url URL] [--short NAME] [--name TITLE] [--wait SECONDS (150)] [--dry-run] [--confirm a,b|none]
   fetch <link>...          stage only (metadata + PDF + full text + duplicate check + proposed title) in inbox/, full card, no write
   suggest <slug>           classification with evidence for a staged paper (no write)
   save <slug> [add options]   save a staged paper; without --tags the script's suggestion is used
   list / show <slug>       staged papers
 
 Organizing what is already in Zotero
-  tidy [--only K1,K2] [--collection X] [--confirm a,b|none] [--dry-run] [--wait S] [--no-commit]
+  tidy [--only K1,K2] [--collection X] [--confirm a,b|none] [--dry-run] [--wait S]
                            items without a status tag (dropped into Zotero by hand): fill metadata, format the title,
                            set URL / short title, classify, file into a collection — via the Web API
   verify <key> [--wait S]  server + local state of one item
@@ -28,14 +28,15 @@ Organizing what is already in Zotero
 Finding papers
   discover [--days 7] [--cat cs.RO,cs.AI] [--query REGEX] [--tags a,b] [--all] [--source arxiv,hf] [--max 400]
                            recent papers scored against the taxonomy; nothing is saved
-  cite <key|arXiv|DOI|link> [--top 15]   references and citations of one paper, cross-checked with the library
-  cite --library [--top 20]              citation links between library papers
+  refs <key|arXiv|DOI|link> [--top 15]   references and citations of one paper, cross-checked with the library
+  refs --library [--top 20]              citation links between library papers
 
 Library and batch
   dump [--table]           read-only snapshot -> cache/library_dump.json
   proposal                 render proposals/proposal.py -> proposals/proposal.md
   apply --dry-run|--plan|--apply [--only K1,K2] [--no-rename] [--no-status]   batch write (approval mode)
-  setup [--sync-skills]    health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills)
+  setup [--sync-skills]    health check (Python / .env / data dir / taxonomy / pdftotext / network / Zotero / API key / LLM / skills / agents)
+  --version                print the version (CHANGELOG.md lists the changes)
 
 With ZC_LLM=agent (no local model) add / save / tidy pause with an ADJUDICATE block; answer it on the printed command with
 --confirm <tags> (the candidates you confirm) or --confirm none.
@@ -48,7 +49,6 @@ def _add_save_opts(ap):
     ap.add_argument("--force", action="store_true", help="add even if the library already has it"); ap.add_argument("--venue"); ap.add_argument("--date")
     ap.add_argument("--name", help="original title (overrides the fetched one)"); ap.add_argument("--url", help="URL field (default: project page, else arXiv/DOI link)")
     ap.add_argument("--short", help="Short Title (default: the name before the colon)"); ap.add_argument("--wait", type=int, default=150, help="seconds to wait for the server sync; 0 = don't wait")
-    ap.add_argument("--no-commit", action="store_true", help="don't git commit/push the log")
     ap.add_argument("--confirm", help="ZC_LLM=agent: the ADJUDICATE candidates you confirm (comma-separated), or none")
 
 
@@ -58,7 +58,7 @@ def _confirm(v):
 
 def _kw(a):
     return dict(collection=a.collection, also=a.also, tags=[t for t in a.tags.split(",") if t], drop=[t for t in a.drop.split(",") if t], first=a.first,
-                force=a.force, venue=a.venue, date_=a.date, name=a.name, url=a.url, short=a.short, wait=a.wait, commit=not a.no_commit, confirm=_confirm(a.confirm))
+                force=a.force, venue=a.venue, date_=a.date, name=a.name, url=a.url, short=a.short, wait=a.wait, confirm=_confirm(a.confirm))
 
 
 def _opt(args, name, default=None, cast=str):
@@ -68,6 +68,7 @@ def _opt(args, name, default=None, cast=str):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help", "help"): print(USAGE); return
+    if argv[0] in ("--version", "-V", "version"): print(f"{NAME} {__version__}"); return
     cmd, args = argv[0], argv[1:]
 
     if cmd == "add":
@@ -94,8 +95,7 @@ def main(argv=None):
     elif cmd == "tidy":
         from . import pipeline
         only = set(_opt(args, "--only", "").split(",")) - {""} or None
-        pipeline.tidy(only=only, write="--dry-run" not in args, wait=_opt(args, "--wait", 0, int), commit="--no-commit" not in args, collection=_opt(args, "--collection"),
-                      confirm=_confirm(_opt(args, "--confirm")))
+        pipeline.tidy(only=only, write="--dry-run" not in args, wait=_opt(args, "--wait", 0, int), collection=_opt(args, "--collection"), confirm=_confirm(_opt(args, "--confirm")))
     elif cmd == "verify":
         from . import pipeline; pipeline.verify(args[0], wait=_opt(args, "--wait", 0, int))
     elif cmd == "tag":
@@ -116,7 +116,7 @@ def main(argv=None):
         discover.run(days=_opt(args, "--days", 7, int), cats=tuple(_opt(args, "--cat", "cs.RO").split(",")), query=_opt(args, "--query"),
                      tags=tuple(_opt(args, "--tags", "").split(",")), require_all="--all" in args,
                      sources=tuple(_opt(args, "--source", "arxiv,hf").split(",")), max_results=_opt(args, "--max", 400, int))
-    elif cmd == "cite":
+    elif cmd == "refs":
         from . import citations
         if "--library" in args: citations.library(top=_opt(args, "--top", 20, int))
         else: citations.one(args[0], top=_opt(args, "--top", 15, int))

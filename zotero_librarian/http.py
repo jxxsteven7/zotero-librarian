@@ -1,8 +1,10 @@
 """Small HTTP helpers with a fixed User-Agent and timeout."""
 import urllib.request
 
+from . import NAME, __version__
+
 UA_WEB = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-UA_LOCAL = "zotero-claude/1.0"            # the Zotero connector rejects browser-looking (Mozilla/...) user agents
+UA_LOCAL = f"{NAME}/{__version__}"        # the Zotero connector rejects browser-looking (Mozilla/...) user agents
 
 
 def http(url, headers=None, data=None, method=None, timeout=60, ua=UA_WEB):

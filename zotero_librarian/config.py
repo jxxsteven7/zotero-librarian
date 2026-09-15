@@ -5,7 +5,7 @@ Layout (ROOT = the parent of this package):
   taxonomy.toml                  collections, tag vocabulary, classification rules, venue abbreviations
   inbox/                         fetch staging area (json/pdf/txt), cleared after saving, not in git
   cache/library_dump.json        library snapshot from `zc.py dump`, not in git
-  logs/zotero-organize.log.md    audit log of every write, in git
+  logs/zotero-organize.log.md    audit log of every write (local, not in git)
   proposals/proposal.py          approval-mode batch data
 
 .env keys (KEY=VALUE per line; a file holding just the bare API key also works):
@@ -36,6 +36,20 @@ IS_MAC = sys.platform == "darwin"
 for _s in (sys.stdout, sys.stderr):
     if _s and hasattr(_s, "reconfigure") and (_s.encoding or "").lower().replace("-", "") != "utf8":
         _s.reconfigure(encoding="utf-8", errors="replace")
+
+
+LOG_HEADER = """# Audit log
+
+Every write to the library is appended here by the scripts (`zc.py add / tidy / tag / untag / collect / set / recheck --write / apply`),
+one section per action: `## <date> — <action>` followed by `- <key> | <title> | what changed`. Local to this machine, not in git.
+"""
+
+
+def append_log(*lines):
+    """Append to the audit log; the file (and logs/) is created with a header on first use."""
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    new = not os.path.exists(LOG)
+    with open(LOG, "a", encoding="utf-8") as f: f.write((LOG_HEADER if new else "") + "\n" + "\n".join(lines) + "\n")
 
 
 def load_env():

@@ -9,10 +9,10 @@ Full texts are cached in cache/text/<key>.txt (extracted from the Zotero PDFs on
 Re-run after editing taxonomy.toml patterns / thresholds to see precision and recall move."""
 import os, sys, collections, re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, ROOT)
-from zotero_claude import localdb, classify, llm, taxonomy as tx
-from zotero_claude.config import CACHE, DATA_DIR
-from zotero_claude.pdf import pdf_text
-from zotero_claude.titles import strip_prefix
+from zotero_librarian import localdb, classify, llm, taxonomy as tx
+from zotero_librarian.config import CACHE, DATA_DIR
+from zotero_librarian.pdf import pdf_text
+from zotero_librarian.titles import strip_prefix
 
 TXT = os.path.join(CACHE, "text"); os.makedirs(TXT, exist_ok=True)
 rows = localdb.load()

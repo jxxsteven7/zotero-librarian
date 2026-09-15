@@ -1,4 +1,4 @@
-# zotero-claude
+# zotero-librarian
 
 Keep a Zotero library organized from your coding agent — [Claude Code](https://claude.com/claude-code),
 [Codex](https://developers.openai.com/codex), [Kimi Code CLI](https://github.com/MoonshotAI/kimi-cli) — without
@@ -30,7 +30,6 @@ $ python3 zc.py add https://arxiv.org/abs/2607.11481
   model     : qwen3.5:9b (confidence 1.0) — The paper introduces a teleoperation system for dexterous hands trained via RL, deployed on a single-arm setup.
 saved U3HFYV4Q | [2026-0713] [arXiv] Towards Human-level Dexterous Teleoperation
   sync      : ok server v3540 | collections ['Dex-Manipulation'] | tags ['embod:dex-hand', 'embod:single-arm', 'method:rl', 'method:teleop', 'status:to-read']
-  git       : committed and pushed
 
 | key | title | collection | tags | PDF | notes |
 |---|---|---|---|---|---|
@@ -46,7 +45,7 @@ naming the file, deciding which folder and which tags, keeping the library consi
 goes from "saw the link" to "sitting in the right place with the right tags, ready to read" in one command. The tags are
 a reading aid, not a substitute: every one comes with the sentence that justified it, and the borderline ones are
 left for you to decide. Then you open the PDF and read it yourself, and the library you end up with is one you actually
-know. `discover` and `cite` serve the same purpose upstream: they shorten the search for what to read next, not the reading.
+know. `discover` and `refs` serve the same purpose upstream: they shorten the search for what to read next, not the reading.
 
 ## What it does
 
@@ -55,13 +54,13 @@ know. `discover` and `cite` serve the same purpose upstream: they shorten the se
 | `zc.py add <links...>` | The pipeline above. Accepts arXiv (abs / pdf / bare id / alphaxiv / HF papers), DOI, OpenReview, direct PDF links, local PDFs, project pages, and paper pages with `citation_*` meta (JMLR, PMLR, ACL). Pauses when the collection is genuinely ambiguous and prints the command to finish. |
 | `zc.py tidy` | Same treatment for papers you dropped into Zotero by hand: finds items without a status tag, fills metadata, formats the title, sets URL and Short Title, classifies, files. |
 | `zc.py discover` | Recent arXiv papers (and Hugging Face daily papers) scored against *your* tags. Nothing saved; pick and `add`. |
-| `zc.py cite <paper>` / `--library` | References and citations from Semantic Scholar, split into "already in your library" and "missing, by citation count"; or the citation graph among your own papers. |
+| `zc.py refs <paper>` / `--library` | References and citations from Semantic Scholar, split into "already in your library" and "missing, by citation count"; or the citation graph among your own papers. |
 | `zc.py recheck` | Re-verify existing arXiv items: accepted somewhere since? Is the title date the v1 date? |
 | `zc.py tag / untag / collect / set / verify` | Single-item edits through the Web API, each with optimistic locking and an audit-log line. |
 | `zc.py apply` | Approval-mode batch changes (vocabulary renames, corrections across many items). |
 | `zc.py setup` | New-machine health check with the fix for every missing piece. |
 
-The skills `download`, `tidy`, `discover`, `cite` are thin wrappers that run these commands and relay the report — the
+The skills `download`, `tidy`, `discover`, `refs` are thin wrappers that run these commands and relay the report — the
 agent never reads PDFs or greps for hardware names itself. Saving tokens is the design rule: anything a script or a
 local model can decide is decided there.
 
@@ -78,7 +77,7 @@ local model can decide is decided there.
   mentions it.
 - **PDFs are saved by Zotero itself** through the desktop connector endpoint, so they sync like any other attachment
   (including WebDAV setups, where Web-API uploads never reach the clients).
-- **Everything is logged** (`logs/zotero-organize.log.md`), and nothing is ever deleted by the scripts.
+- **Everything is logged** (`logs/zotero-organize.log.md`, local to the machine), and nothing is ever deleted by the scripts.
 
 ## Works with Claude Code, Codex, Kimi Code CLI
 
@@ -168,8 +167,8 @@ Requirements: Python 3.11+ (standard library only), `pdftotext` (poppler) or `pi
 with sync enabled, a Zotero Web API key.
 
 ```bash
-git clone https://github.com/jxxsteven7/zotero-claude.git ~/zotero-claude
-cd ~/zotero-claude
+git clone https://github.com/jxxsteven7/zotero-librarian.git ~/zotero-librarian
+cd ~/zotero-librarian
 cp .env.example .env      # ZOTERO_API_KEY, ZOTERO_LIBRARY_ID; the data directory is auto-detected (chmod 600 .env)
 ./setup.sh                # health check: Python / .env / data dir / taxonomy / pdftotext / HTTPS / Zotero / API key / adjudicator / skills
 claude                    # or codex, or kimi — open the agent here and use the download skill: /download <link>
@@ -188,16 +187,16 @@ set the attachment rename template so file names don't inherit the title prefix 
 ## How it fits together
 
 ```
-zc.py                     entry point
+zc.py                     entry point (the short name predates the rename; `python3 zc.py --help`)
 taxonomy.toml             your collections, tags, rules, venues
 AGENTS.md                 the agent's rules: how the library is accessed, what it may do, how to use the reports (CLAUDE.md imports it)
-zotero_claude/
+zotero_librarian/
   fetch / sources / pdf / published / titles   metadata, PDFs, venue lookup, title format
   classify / llm                               rule engine with evidence; adjudication by a local model or the agent
   connector / zapi / localdb                   Zotero desktop connector (new items + PDF), Web API (edits), read-only sqlite
   pipeline / discover / citations / recheck    the commands
-.agents/skills/           download / tidy / discover / cite (Agent Skills format); .claude/skills/ is the copy Claude Code reads
-logs/                     audit log (committed), library notes
+.agents/skills/           download / tidy / discover / refs (Agent Skills format); .claude/skills/ is the copy Claude Code reads
+logs/                     audit log (local, git-ignored)
 tools/                    eval_classify.py, fix_pdf_names.js
 ```
 
@@ -212,7 +211,10 @@ connector endpoints it uses are the ones the official browser connector uses, bu
 API; tested with Zotero 7 and 10. Semantic Scholar without a key is rate-limited; arXiv's export API often returns
 429 from shared networks, in which case the scripts scrape the abs pages instead.
 
-Contributions welcome — especially taxonomies for other fields, and eval results on other libraries.
+Contributions welcome — especially taxonomies for other fields, and eval results on other libraries. One feature per
+PR; the merge commit is titled `vX.Y: ...`, bumps `__version__` and adds a line to `CHANGELOG.md` (rules for agents
+and humans alike are in `AGENTS.md`). Skills live in `.agents/skills/` and must stay agent-neutral; the code must run
+on Ubuntu, macOS and Windows with the standard library only.
 
 ## License
 

@@ -10,9 +10,11 @@ comes with the install / configuration command for this platform. Exit code 1 = 
 import filecmp, os, shutil, ssl, stat, sys, urllib.error, urllib.request
 
 from . import config, llm
+from .http import UA_LOCAL
 
 SKILLS_SRC = os.path.join(config.ROOT, ".agents", "skills")            # Agent Skills standard location (Codex, Kimi, ...)
 SKILLS_MIRROR = os.path.join(config.ROOT, ".claude", "skills")          # Claude Code only reads this one
+AGENTS = [("Claude Code", "claude", "/download <link>"), ("Codex", "codex", "$download <link>"), ("Kimi Code CLI", "kimi", "/skill:download <link>")]
 
 
 def stale_skills():
@@ -33,7 +35,7 @@ OK, BAD, WARN = "ok ", "x  ", "!  "
 PY = "python" if config.IS_WIN else "python3"
 
 
-def https(url, ua="zotero-claude/1.0", timeout=10):
+def https(url, ua=UA_LOCAL, timeout=10):
     return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": ua}), timeout=timeout).status
 
 
@@ -122,7 +124,7 @@ def run(argv=()):
     if env.get("ZOTERO_API_KEY") and env.get("ZOTERO_LIBRARY_ID"):
         try:
             req = urllib.request.Request(f"https://api.zotero.org/users/{config.LIBRARY_ID}/items?limit=1&format=keys",
-                                         headers={"Zotero-API-Key": env["ZOTERO_API_KEY"], "Zotero-API-Version": "3", "User-Agent": "zotero-claude/1.0"})
+                                         headers={"Zotero-API-Key": env["ZOTERO_API_KEY"], "Zotero-API-Version": "3", "User-Agent": UA_LOCAL})
             r = urllib.request.urlopen(req, timeout=15)
             report(True, f"Web API key works (library {config.LIBRARY_ID}, server version {r.headers.get('Last-Modified-Version')})")
         except urllib.error.HTTPError as e:
@@ -141,7 +143,12 @@ def run(argv=()):
     stale = stale_skills()
     report(not stale, "skills: .claude/skills mirrors .agents/skills" if not stale else f"skills out of sync: {', '.join(stale)}", f"{PY} zc.py setup --sync-skills", warn=True)
 
+    # 11. which agent CLIs are installed, and how each one runs a skill (nothing to configure: each reads its own files)
+    found = [(name, syntax) for name, exe, syntax in AGENTS if shutil.which(exe)]
+    if found: report(True, "agents on PATH: " + "; ".join(f"{n} -> {s}" for n, s in found))
+    else: report(True, "no agent CLI on PATH (claude / codex / kimi) — install one, or point any agent that reads AGENTS.md at this directory", warn=True)
+
     print()
     if problems:
         print(f"{len(problems)} problem(s) above (x). Fix them and run `{PY} zc.py setup` again"); sys.exit(1)
-    print("All good: open your agent here (claude / codex / kimi) and use the download skill (/download, $download, /skill:download) <link>")
+    print("All good: open your agent in this directory and use the download skill" + (f", e.g. {found[0][1]}" if found else ""))

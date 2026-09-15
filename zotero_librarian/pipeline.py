@@ -1,17 +1,17 @@
 """End-to-end flows.
 
 add    link -> fetch -> classify (rules + local LLM) -> save through the desktop connector -> verify on the server ->
-       commit the audit log -> print a report row.  Used by the download skill.
+       append the audit log -> print a report row.  Used by the download skill.
 tidy   organize items that were dropped into Zotero by hand (no status tag yet): fill missing metadata from arXiv /
        Crossref, format the title, set URL / short title, classify, file into a collection — all through the Web API.
 verify one item: server state + local sync state.
 Things a human must decide are marked "PAUSE" (collection boundary) and the item is skipped, with the exact command to
 finish it. With ZC_LLM=agent the same pause carries the ADJUDICATE block; the agent finishes with `--confirm`."""
-import os, re, subprocess
+import os, re
 from datetime import date
 
 from . import classify, connector, fetch, llm, localdb, taxonomy as tx, zapi
-from .config import DATA_DIR, INBOX, LOG, ROOT
+from .config import DATA_DIR, INBOX
 from .pdf import pdf_text, project_urls, project_url_score
 from .published import lookup_published
 from .sources import ARXIV_ID, meta_arxiv, meta_crossref, meta_page
@@ -86,18 +86,6 @@ def verify(key, wait=150, quiet=False):
     return info
 
 
-def commit_log(msg):
-    """Commit and push the audit log (that single file; nothing else). Failures only warn."""
-    def git(*a): return subprocess.run(["git", "-C", ROOT] + list(a), capture_output=True, text=True)
-    rel = os.path.relpath(LOG, ROOT)
-    if not git("status", "--porcelain", "--", rel).stdout.strip(): return "log unchanged"
-    git("add", "--", rel)
-    r = git("commit", "-q", "-m", msg + "\n\nCo-Authored-By: Claude <noreply@anthropic.com>", "--", rel)
-    if r.returncode: return "commit failed: " + (r.stderr or r.stdout).strip()[:200]
-    r = git("push", "-q")
-    return "committed and pushed" if r.returncode == 0 else "committed; push failed (" + (r.stderr or r.stdout).strip()[:120] + ") — run git push later"
-
-
 def report_row(got, sg, info, note_extra=""):
     notes = []
     if sg["maybe"]: notes.append("candidates: " + "; ".join(f"`{t}` ({w})" for t, w in sg["maybe"].items()))
@@ -109,19 +97,17 @@ def report_row(got, sg, info, note_extra=""):
             f" | {', '.join(t for t in got['tags_written'] if t != 'notion')} | {'yes' if got['pdf_ok'] else 'no'} | sync {sync}. " + ("; ".join(notes) or "—") + " |")
 
 
-def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150, commit=True):
-    """Save + verify + commit log + report row. Shared by add and save."""
+def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150):
+    """Save + verify + report row. Shared by add and save (the connector already appended the audit log)."""
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
     got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
     info = verify(got["key"], wait=wait) if wait else None
-    git_msg = commit_log(f"log: add {got['short']}") if commit else "not committed (--no-commit)"
-    print(f"  git       : {git_msg}")
     row = report_row(got, sg, info)
     print("\n" + row + "\n")
     return got, row
 
 
-def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True, dry_run=False,
+def add(links, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, dry_run=False,
         venue=None, date_=None, name=None, url=None, short=None, confirm=None):
     if confirm is not None and len(links) != 1: raise SystemExit("--confirm answers one paper's ADJUDICATE block: one link (or use `zc.py save <slug> --confirm ...`)")
     rows = []
@@ -141,19 +127,19 @@ def add(links, collection=None, tags=None, drop=None, also=None, first=False, fo
         if need_coll or need_adj:
             why = pause_cmd(f"python3 zc.py save {m['slug']}", sg, coll, also_, need_coll, need_adj)
             rows.append(f"| PAUSE | {m['proposed_title']} | {coll}{'?' if need_coll else ''} | {', '.join(tags_)} | {'yes' if m.get('pdf_src') else 'no'} | {why} |"); continue
-        got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
+        got, row = finish(m["slug"], m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
         rows.append(row)
     print("\n" + HEADER + "\n" + "\n".join(rows))
     return rows
 
 
-def save(slug, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150, commit=True,
+def save(slug, collection=None, tags=None, drop=None, also=None, first=False, force=False, wait=150,
          venue=None, date_=None, name=None, url=None, short=None, confirm=None):
     """Save something already fetched (after a PAUSE, or after `zc.py fetch`). Without --tags the script's suggestion is used."""
     m = fetch.load(slug); sg = suggest_for(m, confirm=confirm)
     if confirm is None and llm.pending(sg): print(classify.fmt(sg)); print(llm.fmt_llm(sg)); raise SystemExit(f"  x ZC_LLM=agent: answer the ADJUDICATE block with --confirm <tags>|none")
     coll, also_, tags_ = decide(sg, collection, tags, drop, also, first)
-    got, row = finish(slug, m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait, commit)
+    got, row = finish(slug, m, sg, coll, also_, tags_, venue, date_, name, url, short, force, wait)
     print("\n" + HEADER + "\n" + row)
     return got
 
@@ -226,7 +212,7 @@ def plan_item(r, confirm=None):
                 notes=notes, abstract=abstract, has_text=bool(text))
 
 
-def tidy(only=None, write=True, wait=0, commit=True, collection=None, confirm=None):
+def tidy(only=None, write=True, wait=0, collection=None, confirm=None):
     if confirm is not None and len(only or ()) != 1: raise SystemExit("--confirm answers one item's ADJUDICATE block: use --only <key> --confirm ...")
     rows = localdb.load(refresh=True)
     todo = untidy_items(rows, only)
@@ -265,6 +251,5 @@ def tidy(only=None, write=True, wait=0, commit=True, collection=None, confirm=No
         got = dict(key=p["key"], title=p["title"], collection=coll, also=sg["also"], tags_written=new_tags, pdf_ok=bool(r["pdfs"]), date_src=p["src"], venue_src="")
         row = report_row(got, sg, info if wait else True, note_extra="; ".join(p["notes"]))
         print("\n" + row + "\n"); out.append(row)
-    if write and commit: print("  git       : " + commit_log("log: tidy " + ", ".join(r["key"] for r in todo)))
     print("\n" + HEADER + "\n" + "\n".join(out))
     return out

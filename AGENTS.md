@@ -1,4 +1,4 @@
-# zotero-claude — rules for the agent working in this repository
+# zotero-librarian — rules for the agent working in this repository
 
 This repository keeps a Zotero library organized: four collections, a controlled `family:value` tag vocabulary,
 `[YYYY-MMDD] [Venue] Title` titles, project pages in the URL field, and a Notion mirror. The scripts do the judging;
@@ -12,18 +12,18 @@ do is done there; never read a PDF, grep a full text or re-derive a classificati
 zc.py                       the only entry point: python3 zc.py <command> (Windows: python zc.py); --help lists everything
 taxonomy.toml               collections, tag vocabulary with definitions, classification rules, venue abbreviations — the source of truth
 AGENTS.md                   this file: how the library is accessed and what the agent may do (CLAUDE.md just imports it)
-zotero_claude/              package, standard library only, Ubuntu / macOS / Windows
+zotero_librarian/              package, standard library only, Ubuntu / macOS / Windows
   config.py taxonomy.py venues.py     .env + paths + sqlite snapshot; taxonomy loader; venue abbreviations
   classify.py llm.py                  rule engine (evidence + thresholds); local-LLM adjudication on top
   pipeline.py                         add / save / tidy / verify: fetch -> classify -> write -> verify -> log -> report
   fetch.py sources.py pdf.py published.py titles.py   metadata (arXiv / Crossref / OpenReview / citation meta), PDFs, venue lookup, titles
   connector.py zapi.py localdb.py     Zotero desktop connector (new items + PDF); Web API (edits); read-only sqlite
   discover.py citations.py recheck.py batch.py setup_check.py cli.py
-.agents/skills/             the skills download / tidy / discover / cite (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
+.agents/skills/             the skills download / tidy / discover / refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
 .claude/skills/             identical copy for Claude Code (`/download`); edit .agents/skills and run `zc.py setup --sync-skills`
 proposals/proposal.py       approval-mode batch data (RETAG / UNTAG / UNCOLLECT / P)
 docs/notero.md              Notion mirror (Notero) configuration
-logs/zotero-organize.log.md audit log (every write, appended by the scripts, committed);  logs/NOTES.md  library-specific state and precedents
+logs/zotero-organize.log.md audit log, appended by the scripts (local to the machine, not in git)
 tools/                      eval_classify.py (measure the classifier on the library), fix_pdf_names.js (Zotero Run JavaScript)
 inbox/  cache/              staged downloads; library snapshot, full-text and API caches (not in git)
 ```
@@ -34,7 +34,7 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
 | organize items dropped into Zotero by hand (`tidy` skill) | `zc.py tidy [--dry-run]` — items without a status tag |
 | edit one item | `zc.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why ...` · `collect <key> <collection>` · `set <key> url=... shortTitle=...` |
 | re-verify arXiv items | `zc.py dump && zc.py recheck [--dates] [--search]`, then `--write` after approval |
-| find papers (`discover`, `cite` skills) | `zc.py discover --days 7 --tags a,b` · `zc.py cite <key|arXiv|DOI>` · `zc.py cite --library` |
+| find papers (`discover`, `refs` skills) | `zc.py discover --days 7 --tags a,b` · `zc.py refs <key|arXiv|DOI>` · `zc.py refs --library` |
 | batch (approval mode) | `zc.py dump` -> edit `proposals/proposal.py` -> `zc.py proposal` -> `zc.py apply --dry-run / --plan / --apply` |
 | new machine | `./setup.sh` (= `zc.py setup`) |
 
@@ -51,9 +51,22 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
 - `DELETE /items` is permanent (no trash, local PDF removed). Delete or move to trash only when the user says so, after writing a snapshot of
   the affected items to the log. Never delete notes or collections.
 - `prefs.js` can only be edited while Zotero is closed. `extensions.zotero.automaticTags` should be off (a per-client setting).
-- Every write is logged by the scripts to `logs/zotero-organize.log.md` (`zc.py add` and `tidy` also commit and push that file). Don't write
-  the log by hand and don't create separate commits for it.
-- Git: commit messages and everything in the repository are in English.
+- Every write is logged by the scripts to `logs/zotero-organize.log.md` (local, git-ignored). Don't write the log by hand.
+
+## Repository rules (git, versions, consistency)
+
+- Everything in the repository, commit messages included, is in English.
+- **One complete feature = one commit**, titled `vX.Y: <what changed>`, and that commit bumps `__version__` in
+  `zotero_librarian/__init__.py` and adds the line to `CHANGELOG.md`. Y grows by one per feature / merged PR; X is bumped by the
+  maintainer, who tags the major versions (`git tag vX.0`). Fixes that are not a feature are plain commits without a version.
+  Never commit `.env`, `cache/`, `inbox/`, `logs/`.
+- **Agent-neutral**: the skills in `.agents/skills/` are the source; `.claude/skills/` must stay a verbatim copy (`zc.py setup`
+  fails the check otherwise; `--sync-skills` copies). A skill uses only what every agent has — "run this command, relay the table,
+  handle PAUSE rows"; no agent-specific frontmatter, tools or syntax. Everything an agent needs is in `AGENTS.md`; `CLAUDE.md`
+  only imports it.
+- **Platform-neutral**: Ubuntu, macOS and Windows, standard library only, Python 3.11+. Paths, credentials and external programs
+  come from `config.py` only (no `~`, no `/tmp`, no hard-coded separators elsewhere); text files are read and written as UTF-8;
+  docs say `python3` and note that Windows uses `python`. `zc.py setup` must pass on all three before a version is tagged.
 
 ## Collections and tags
 
@@ -90,16 +103,16 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
 
 ## Workflows
 
-- The `download` skill runs `zc.py add`: fetch -> classify -> save -> wait for the server sync and verify -> commit the log -> report table.
+- The `download` skill runs `zc.py add`: fetch -> classify -> save -> wait for the server sync and verify -> log -> report table.
   The agent relays the table, lists candidates and flags for the user, and resolves `PAUSE` rows by running the `zc.py save ...` line the
   script printed — with `--collection` decided from the printed abstract, and / or `--confirm` for an ADJUDICATE block. No grepping the
   full text, no polling loops, no hand-written logs.
 - The `tidy` skill runs `zc.py tidy` for items the user dropped into Zotero by hand (no status tag): metadata, title, URL, short title, tags,
   collection — same pauses, same report.
-- `discover` and `cite` only print tables; the user picks, then `download`.
+- `discover` and `refs` only print tables; the user picks, then `download`.
 - Batch changes (vocabulary renames, corrections across many items) stay in approval mode: `proposals/proposal.py` -> `zc.py proposal` ->
   show the table -> `zc.py apply --apply` after approval.
 - Changing the classifier: edit `taxonomy.toml`, run `python3 tools/eval_classify.py` (rules) and `--llm` (with the local model) and keep
   precision from dropping; the numbers are in the README.
 
-Library-specific state, precedents and open items: `logs/NOTES.md`. Notion mirror: `docs/notero.md`.
+Notion mirror: `docs/notero.md`.

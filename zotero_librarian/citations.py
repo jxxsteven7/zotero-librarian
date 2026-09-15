@@ -1,7 +1,7 @@
 """cite — the citation neighbourhood of a paper via Semantic Scholar, cross-referenced with the library.
 
-    zc.py cite <key | arXiv id | DOI | link> [--top 15]     references + citations of one paper; which are already in the library
-    zc.py cite --library                                    citation links *between* library papers (reading order, hubs)
+    zc.py refs <key | arXiv id | DOI | link> [--top 15]     references + citations of one paper; which are already in the library
+    zc.py refs --library                                    citation links *between* library papers (reading order, hubs)
 
 Semantic Scholar's public API allows ~1 request/s without a key; set S2_API_KEY in .env for more. Responses are cached
 in cache/s2/ so repeated runs are free."""
