@@ -127,6 +127,10 @@ def run(argv=()):
                                          headers={"Zotero-API-Key": env["ZOTERO_API_KEY"], "Zotero-API-Version": "3", "User-Agent": UA_LOCAL})
             r = urllib.request.urlopen(req, timeout=15)
             report(True, f"Web API key works (library {config.LIBRARY_ID}, server version {r.headers.get('Last-Modified-Version')})")
+            from . import taxonomy as tx, zapi
+            have, _ = zapi.remote_collections(env); missing = [c for c in tx.COLLECTIONS if c not in have]
+            report(not missing, "the taxonomy's collections exist in the library" if not missing else f"collections from taxonomy.toml missing in the library: {', '.join(missing)}",
+                   f"`{PY} zl.py tidy --create-collections` creates them (or create them in Zotero with exactly these names)", warn=True)
         except urllib.error.HTTPError as e:
             report(False, f"Web API returned {e.code}", "403 = key invalid or without write permission; 404 = ZOTERO_LIBRARY_ID wrong")
         except Exception as e:

@@ -12,6 +12,7 @@
 
 [library]
 default_status = "to-read"
+title_prefix = true                   # rewrite titles as "[YYYY-MMDD] [Venue] Title"; false = leave every title exactly as it is
 keep_bare_tags = ["notion"]           # un-prefixed tags that are allowed (added by plugins)
 negative_context = "(unlike|without|instead of|rather than|compared (to|with)|not (require|rely|need)|beyond|alternative to|in contrast to|limitations? of|prior|existing|previous|conventional|traditional|alternatives? (such as|like)|categorized|strategies|approaches|methods|such as)\\b[^.]{0,50}$"
 # ^ a method mentioned in the abstract right after one of these words is context, not the paper's own method

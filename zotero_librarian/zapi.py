@@ -41,6 +41,15 @@ def remote_collections(env):
     return {c["data"]["name"]: c["key"] for c in js}, {c["key"]: c["data"] for c in js}
 
 
+def create_collection(env, name):
+    """Create a top-level collection; returns its key. Used only by `zl.py tidy --create-collections`."""
+    st, _, js = req(env, "POST", "/collections", body=[{"name": name, "parentCollection": False}])
+    if st != 200 or not js.get("successful"): sys.exit(f"POST collections {name!r} -> {st} {js}")
+    key = js["successful"]["0"]["key"]
+    log(f"## {date.today()} — create collection", f"- {key} | {name}")
+    return key
+
+
 def get_item(env, key):
     """(status, item json or error text)"""
     st, _, js = req(env, "GET", f"/items/{key}")

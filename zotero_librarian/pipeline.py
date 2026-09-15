@@ -196,7 +196,7 @@ def plan_item(r, confirm=None):
     if old_venue and (venue in ("????", "arXiv") or old_venue == venue): venue = old_venue
     if not text and not abstract: notes.append("no PDF text and no abstract: nothing to classify from")
     sg = llm.suggest(title, abstract, text, has_pdf=bool(text), confirm=confirm)
-    new_title = f"[{date_}] [{venue}] {title}"
+    new_title = f"[{date_}] [{venue}] {title}" if tx.TITLE_PREFIX else r["title"]
     if new_title != r["title"]: fields["title"] = new_title
     urls = project_urls(m or {"abstract": abstract}, text or None, pdf=os.path.join(DATA_DIR, r["pdfs"][0]) if r.get("pdfs") else None)
     proj = next((u for u in urls if project_url_score(u, text or None)), None)
@@ -212,12 +212,23 @@ def plan_item(r, confirm=None):
                 notes=notes, abstract=abstract, has_text=bool(text))
 
 
-def tidy(only=None, write=True, wait=0, collection=None, confirm=None):
+def tidy(only=None, write=True, wait=0, collection=None, confirm=None, limit=None, create_collections=False):
+    """Items without a status tag. On a library nobody has organized yet that is every item — the first run.
+    `limit`: only the first N (sample a plan with --dry-run). `create_collections`: create the taxonomy's collections
+    that the library lacks (the only way the scripts ever create a collection)."""
     if confirm is not None and len(only or ()) != 1: raise SystemExit("--confirm answers one item's ADJUDICATE block: use --only <key> --confirm ...")
     rows = localdb.load(refresh=True)
     todo = untidy_items(rows, only)
+    if limit: todo = todo[:limit]
     if not todo: print("nothing to tidy: every item already carries a status tag"); return []
     env = zapi.env_or_die(); ck, _ = zapi.remote_collections(env)
+    missing = [c for c in tx.COLLECTIONS if c not in ck]
+    if missing and create_collections and write:
+        for c in missing: ck[c] = zapi.create_collection(env, c); print(f"created collection {c!r} ({ck[c]}); the Zotero client picks it up on its next sync")
+    elif missing:
+        print(f"! collections from taxonomy.toml missing in the library: {', '.join(missing)}" + ("" if not write else " — nothing written; rerun with --create-collections (or create them in Zotero)"))
+        if write: return []
+    print(f"{len(todo)} item(s) to tidy" + (" [dry-run]" if not write else "") + "\n")
     out = []
     for r in todo:
         p = plan_item(r, confirm); sg = p["sg"]

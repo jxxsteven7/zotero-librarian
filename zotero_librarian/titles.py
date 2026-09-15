@@ -1,5 +1,8 @@
-"""Titles: the `[YYYY-MMDD] [Venue] Original title` format, Short Title, normalization for de-duplication."""
+"""Titles: the `[YYYY-MMDD] [Venue] Original title` format (off with [library] title_prefix = false), Short Title,
+normalization for de-duplication."""
 import re
+
+from .taxonomy import TITLE_PREFIX
 
 
 def ws(s): return re.sub(r"\s+", " ", (s or "")).strip()
@@ -49,4 +52,5 @@ def short_title(name):
 
 
 def make_title(m, name=None, venue=None, date_=None):
+    if not TITLE_PREFIX: return (name or m["title"]).strip()
     return f"[{date_ or fmt_date(m.get('date'))}] [{venue or m.get('venue') or '????'}] {name or m['title']}".strip()

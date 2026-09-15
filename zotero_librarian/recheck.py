@@ -17,6 +17,8 @@ def recheck(write=False, only=None, dates=False, search=False):
     --dates: also check that the title date is the v1 submission date; --search: for items without an arXiv link / watermark,
     search arXiv by title for an earlier preprint (a journal paper with an earlier preprint takes the preprint's v1 date; 3 s each).
     Run `zl.py dump` first. Lists only; --write changes titles through the Web API."""
+    from .taxonomy import TITLE_PREFIX
+    if write and not TITLE_PREFIX: print("[library] title_prefix = false: titles are never rewritten; listing only"); write = False
     items = localdb.load()
     cands = []
     for it in items:

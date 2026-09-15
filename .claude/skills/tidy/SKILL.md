@@ -10,12 +10,16 @@ For papers the user added directly in Zotero (dragged a PDF in, used the browser
 (arXiv / Crossref / page meta), formats the title, sets the URL (project page) and Short Title, classifies, files them
 into a collection, logs and commits.
 
+On a library nobody has organized with this tool yet, that is every item — the first run is the whole library
+(`docs/first-run.md`): sample with `--dry-run --limit 20`, then run with `--create-collections` so the taxonomy's
+collections are created if the library lacks them.
+
 Arguments (optional): item keys to restrict to, e.g. `ABCD1234,EFGH5678`.
 
 ## Steps
 
 1. ```
-   python3 zl.py tidy [--only KEYS]
+   python3 zl.py tidy [--only KEYS] [--limit N] [--create-collections]
    ```
    Add `--dry-run` first if the user wants to see the plan before anything is written. Zotero must have synced the
    items to the server (it does within a minute of adding them); an item "not on the server" just needs a moment.

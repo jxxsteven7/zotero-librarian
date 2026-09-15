@@ -10,6 +10,7 @@ with open(TAXONOMY_PATH, "rb") as _f:
 
 LIB = T.get("library", {})
 DEFAULT_STATUS = LIB.get("default_status", "to-read")
+TITLE_PREFIX = bool(LIB.get("title_prefix", True))
 KEEP_BARE_TAGS = set(LIB.get("keep_bare_tags", []))
 NEGATIVE_CONTEXT = re.compile(LIB["negative_context"], re.I) if LIB.get("negative_context") else None
 

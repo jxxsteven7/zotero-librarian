@@ -22,7 +22,7 @@ zotero_librarian/              package, standard library only, Ubuntu / macOS / 
 .agents/skills/             the skills download / tidy / discover / refs (Agent Skills format; Codex `$download`, Kimi `/skill:download`)
 .claude/skills/             identical copy for Claude Code (`/download`); edit .agents/skills and run `zl.py setup --sync-skills`
 proposals/proposal.py       approval-mode batch data (RETAG / UNTAG / UNCOLLECT / P)
-docs/classifier.md docs/notero.md   how classification works (taxonomy format, adjudicator, eval numbers); Notion mirror (Notero) configuration
+docs/first-run.md docs/classifier.md docs/notero.md   organizing an existing library; how classification works; Notion mirror (Notero)
 CONTRIBUTING.md CHANGELOG.md   issue / PR procedure; one line per version
 logs/zotero-organize.log.md audit log, appended by the scripts (local to the machine, not in git)
 tools/                      eval_classify.py (measure the classifier on the library), fix_pdf_names.js (Zotero Run JavaScript)
@@ -32,7 +32,7 @@ inbox/  cache/              staged downloads; library snapshot, full-text and AP
 | Task | Command |
 |---|---|
 | add papers (`download` skill) | `zl.py add <links...>` — everything in one go; pauses only when the collection is uncertain (or, with `ZC_LLM=agent`, for the ADJUDICATE block) |
-| organize items dropped into Zotero by hand (`tidy` skill) | `zl.py tidy [--dry-run]` — items without a status tag |
+| organize items dropped into Zotero by hand (`tidy` skill) | `zl.py tidy [--dry-run] [--limit N]` — items without a status tag (a library nobody has organized yet: all of them; `--create-collections` adds the taxonomy's collections, see `docs/first-run.md`) |
 | edit one item | `zl.py verify <key>` · `tag <key> a,b` · `untag <key> a,b --why ...` · `collect <key> <collection>` · `set <key> url=... shortTitle=...` |
 | re-verify arXiv items | `zl.py dump && zl.py recheck [--dates] [--search]`, then `--write` after approval |
 | find papers (`discover`, `refs` skills) | `zl.py discover --days 7 --tags a,b` · `zl.py refs <key|arXiv|DOI>` · `zl.py refs --library` |
@@ -93,6 +93,7 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
 - Who adjudicates the borderline candidates is `ZC_LLM` in `.env`: a local model (`ollama` / `openai`, free), the agent (`agent`: the script
   prints an ADJUDICATE block with the candidates, definitions and evidence and pauses; answer with `--confirm a,b` or `--confirm none` on the
   printed command — a few hundred tokens per paper), or nobody (`off`). The candidates asked about are the only ones the answer may contain.
+- Collections are created only by `zl.py tidy --create-collections` (the taxonomy's own, on a first run) — never by the agent on its own.
 - Values outside `taxonomy.toml` are never invented. A new value needs the user's approval and is then added to `taxonomy.toml`
   (definition + patterns); no bare tags except the ones listed in `keep_bare_tags` (`notion` is written by the Notero plugin — keep it,
   and keep the `Notion` link attachment under each item).
@@ -102,7 +103,7 @@ local model reads, so keep them precise. Only four collections, no new ones, no 
 
 ## Titles, dates, venues, URL
 
-- Title = `[YYYY-MMDD] [Venue] Original title`. The date is the day the paper first appeared: arXiv v1 submission date; for a journal or
+- Title = `[YYYY-MMDD] [Venue] Original title` (unless `[library] title_prefix = false`, then titles are never touched). The date is the day the paper first appeared: arXiv v1 submission date; for a journal or
   conference paper with an earlier preprint, the preprint's v1; otherwise the online publication date (PDF first page, then Crossref
   `published-online`; Crossref `created` only if within a year of the print year). Later versions, re-downloads and acceptance never move
   the date. Unknown precision is written as far as it goes (`[2008-11]`, `[1987]`), never invented.

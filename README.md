@@ -48,6 +48,11 @@ claude                      # or codex / kimi — then: /download <link>
 Needs Python 3.11+ (nothing to pip-install), `pdftotext` (poppler) or `pip install pypdf`, Zotero 7+ with sync on.
 Optional: [Ollama](https://ollama.com) + `ollama pull qwen3.5:9b` for free local adjudication (else `ZC_LLM=agent`).
 
+**Library already full and messy?** `zl.py tidy` organizes everything that has no status tag yet — on a first run,
+the whole library: `--dry-run --limit 20` to see the plan, then `--create-collections` to run it. What it files by is
+entirely `taxonomy.toml` (collections, tag definitions, rules, venues — edit it for your field; `title_prefix = false`
+if you want your titles left alone). Step by step: [docs/first-run.md](docs/first-run.md).
+
 ## What it does
 
 | Skill / command | |
@@ -88,7 +93,7 @@ rules + qwen3.5:9b 0.87 / 0.81, 127 / 129 collections. Edit the taxonomy for you
 zl.py  taxonomy.toml  AGENTS.md          entry point · your collections, tags, rules, venues · the agent's rules (CLAUDE.md imports it)
 zotero_librarian/                        fetch / classify / llm / pipeline / connector / zapi / ... (stdlib only)
 .agents/skills/  .claude/skills/         download · tidy · discover · refs  (source · verbatim copy)
-docs/  tools/  CHANGELOG.md              classifier.md, notero.md · eval_classify.py, fix_pdf_names.js · one line per version
+docs/  tools/  CHANGELOG.md              first-run.md, classifier.md, notero.md · eval_classify.py, fix_pdf_names.js · one line per version
 .env  cache/  inbox/  logs/              per machine, git-ignored
 ```
 

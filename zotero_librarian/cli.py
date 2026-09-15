@@ -15,9 +15,11 @@ Adding papers (the download skill)
   list / show <slug>       staged papers
 
 Organizing what is already in Zotero
-  tidy [--only K1,K2] [--collection X] [--confirm a,b|none] [--dry-run] [--wait S]
-                           items without a status tag (dropped into Zotero by hand): fill metadata, format the title,
-                           set URL / short title, classify, file into a collection — via the Web API
+  tidy [--only K1,K2] [--collection X] [--confirm a,b|none] [--dry-run] [--limit N] [--create-collections] [--wait S]
+                           items without a status tag (dropped into Zotero by hand — or, on a library nobody has organized
+                           yet, every item): fill metadata, format the title, set URL / short title, classify, file into a
+                           collection — via the Web API. --dry-run --limit 20 samples the plan; --create-collections adds
+                           the taxonomy's collections that the library lacks
   verify <key> [--wait S]  server + local state of one item
   tag <key> a,b            add tags (never removes)
   untag <key> a,b [--why REASON]   remove tags (only to correct a fresh mistake, or on explicit request)
@@ -96,7 +98,8 @@ def main(argv=None):
     elif cmd == "tidy":
         from . import pipeline
         only = set(_opt(args, "--only", "").split(",")) - {""} or None
-        pipeline.tidy(only=only, write="--dry-run" not in args, wait=_opt(args, "--wait", 0, int), collection=_opt(args, "--collection"), confirm=_confirm(_opt(args, "--confirm")))
+        pipeline.tidy(only=only, write="--dry-run" not in args, wait=_opt(args, "--wait", 0, int), collection=_opt(args, "--collection"), confirm=_confirm(_opt(args, "--confirm")),
+                      limit=_opt(args, "--limit", None, int), create_collections="--create-collections" in args)
     elif cmd == "verify":
         from . import pipeline; pipeline.verify(args[0], wait=_opt(args, "--wait", 0, int))
     elif cmd == "tag":
