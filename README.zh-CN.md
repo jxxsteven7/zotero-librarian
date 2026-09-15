@@ -84,7 +84,7 @@ claude                      # 或 codex / kimi，然后：/download <链接>
 | Agent | 读取 | 调用 |
 |---|---|---|
 | Claude Code | `CLAUDE.md` → `AGENTS.md`，`.claude/skills/` | `/download <链接>` |
-| Codex CLI | `AGENTS.md`，`.agents/skills/` | `$download <链接>`（要放开网络：`[sandbox_workspace_write] network_access = true`） |
+| Codex CLI | `AGENTS.md`，`.agents/skills/` | `$download <链接>`（要放开网络：`[sandbox_workspace_write] network_access = true`；Ubuntu 24.04+ 还要 `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`，否则它的沙箱起不来） |
 | Kimi Code CLI | `AGENTS.md`，`.agents/skills/` | `/skill:download <链接>` |
 
 一份规则文件，一套 [Agent Skills](https://agentskills.io) 格式的 skills；`.claude/skills` 是逐字副本，`zl.py setup` 会核对。

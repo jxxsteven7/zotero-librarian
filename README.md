@@ -88,7 +88,7 @@ mirror useful (Short Title = page title, URL = project page); the recipe is in [
 | Agent | reads | invoke |
 |---|---|---|
 | Claude Code | `CLAUDE.md` → `AGENTS.md`, `.claude/skills/` | `/download <link>` |
-| Codex CLI | `AGENTS.md`, `.agents/skills/` | `$download <link>` (allow network: `[sandbox_workspace_write] network_access = true`) |
+| Codex CLI | `AGENTS.md`, `.agents/skills/` | `$download <link>` (allow network: `[sandbox_workspace_write] network_access = true`; Ubuntu 24.04+ also needs `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` for its sandbox) |
 | Kimi Code CLI | `AGENTS.md`, `.agents/skills/` | `/skill:download <link>` |
 
 One rule file, one set of skills in the [Agent Skills](https://agentskills.io) format; `.claude/skills` is a verbatim
