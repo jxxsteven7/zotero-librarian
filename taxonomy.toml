@@ -366,6 +366,10 @@ match = ["\\bjmlr\\b"]
 [[venues]]
 abbr = "TPAMI"
 match = ["\\btpami\\b"]
+[[venues]]
+abbr = "JSTAT"
+name = "journal of statistical mechanics"
+match = ["\\bjstat\\b"]
 # Journals (full-name substring only)
 [[venues]]
 abbr = "KBS"
