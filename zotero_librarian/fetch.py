@@ -8,7 +8,7 @@ from .http import get_text
 from .pdf import download_pdf, pdf_text, pdf_first_page_date, project_urls, project_url_score
 from .published import lookup_published
 from .sources import ARXIV_ID, classify_link, slug_of, meta_arxiv, meta_crossref, meta_openreview, meta_page, ids_from_pdf_text, ids_from_page
-from .titles import make_title, norm_title, short_title
+from .titles import ascii_pi, make_title, norm_title, short_title
 
 
 def load(slug):
@@ -112,6 +112,7 @@ def fetch_one(link):
     if m["source"] == "arxiv": lookup_published(m, text if os.path.exists(pdf) else None)   # preprint: look for the published venue
     m["project_urls"] = project_urls(m, text if os.path.exists(pdf) else None, pdf=pdf if os.path.exists(pdf) else None)
     m["project_url"] = next((u for u in m["project_urls"] if project_url_score(u, text if os.path.exists(pdf) else None)), None)   # only project-page-like candidates become the URL field automatically
+    m["title"] = ascii_pi(m["title"])                                             # every source (Crossref, OpenReview, a page), not only the ones that go through clean_title
     m["proposed_title"] = make_title(m)
     m["short_title"] = short_title(m["title"])
     dup = find_duplicate(m); m["duplicate"] = {"key": dup["key"], "title": dup["title"]} if dup else None

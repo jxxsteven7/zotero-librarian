@@ -83,7 +83,9 @@ appeared (arXiv v1, else the preprint's v1, else online publication), never move
 as known (`[2008-11]`, `[1987]`). Venue = abbreviation from `taxonomy.toml`; `[arXiv]` until acceptance is found by the scripts
 (arXiv comment -> PDF first page -> Semantic Scholar -> Crossref -> project page). **Never fill a venue from memory.**
 URL = project page if one exists, else the arXiv / DOI link; the arXiv id stays in the DOI field; Short Title = nickname >
-part before the colon > title. PDF file names carry no prefix (Zotero rename template; `tools/fix_pdf_names.js` repairs old ones).
+part before the colon > title. Physical Intelligence's models are written in ASCII in titles and short titles (`pi0`, `pi0.5`,
+never the Greek π — it is not searchable; `titles.ascii_pi`). PDF file names carry no prefix (Zotero rename template;
+`tools/fix_pdf_names.js` repairs old ones).
 
 ## Workflows
 

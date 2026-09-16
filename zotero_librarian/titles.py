@@ -8,9 +8,19 @@ from .taxonomy import TITLE_PREFIX
 def ws(s): return re.sub(r"\s+", " ", (s or "")).strip()
 
 
+SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+
+def ascii_pi(t):
+    """Physical Intelligence's model names are written in ASCII — `pi0`, `pi0.5`, `pi0.6` — never with the Greek letter:
+    a π in a title is not searchable (the user's rule, 2026-09-16). Only a π directly followed by a digit is touched."""
+    t = re.sub(r"π[₀-₉][₀-₉.]*", lambda m: m.group(0).translate(SUBSCRIPT_DIGITS), t or "")     # π₀.₅ -> π0.5
+    return re.sub(r"π\s*[_\-]?\s*(?=\d)", "pi", t)
+
+
 def clean_title(t):
-    """Strip LaTeX from arXiv titles: $π_0$ -> π0, $\\pi_0$ keeps the letters."""
-    return ws(re.sub(r"\$([^$]*)\$", lambda m: re.sub(r"[_^{}$\\]", "", m.group(1)), t or ""))
+    """Strip LaTeX from arXiv titles ($π_0$, $\\pi_0$ -> pi0) and write PI's model names in ASCII (ascii_pi)."""
+    return ascii_pi(ws(re.sub(r"\$([^$]*)\$", lambda m: re.sub(r"[_^{}$\\]", "", m.group(1)), t or "")))
 
 
 def fmt_date(d):
@@ -42,7 +52,7 @@ def merge_prefix(old_date, old_venue, date_, venue):
 
 
 def norm_title(t):
-    t = re.sub(r"^(\s*\[[^\]]*\]\s*)+", "", t or "")            # drop [date] [venue] prefixes
+    t = re.sub(r"^(\s*\[[^\]]*\]\s*)+", "", ascii_pi(t))        # drop [date] [venue] prefixes; π0.5 and pi0.5 are the same paper
     return re.sub(r"[^a-z0-9]+", "", t.lower())
 
 

@@ -2,6 +2,8 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v1.2** (2026-09-16) — Physical Intelligence's model names are written in ASCII in titles and short titles (`pi0`, `pi0.5`,
+  never the Greek π: not searchable); `titles.ascii_pi`, applied to every source and to the duplicate check.
 - **v1.1** (2026-09-16) — `taxonomy.toml`: venue `JSTAT` (Journal of Statistical Mechanics: Theory and Experiment).
 - **v1.0** (2026-09-15) — First public release. Claude Code and Codex; Ubuntu, macOS and Windows each verified end to end
   (`setup`, the tests, the live commands against a running Zotero); the classifier re-measured on the library (README, docs/classifier.md).

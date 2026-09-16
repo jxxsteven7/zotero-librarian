@@ -32,5 +32,13 @@ class Titles(unittest.TestCase):
     def test_normalization_and_latex(self):
         self.assertEqual(titles.norm_title("[2025] [arXiv] Hello, World!"), "helloworld"); self.assertEqual(titles.clean_title("$\\pi_0$: A Vision"), "pi0: A Vision")
 
+    def test_pi_model_names_are_ascii(self):
+        # Physical Intelligence's models: π0.5 -> pi0.5 (searchable); a π that is not followed by a digit is left alone
+        self.assertEqual(titles.clean_title("π0.5: a Vision-Language-Action Model"), "pi0.5: a Vision-Language-Action Model")
+        self.assertEqual(titles.clean_title("$π_0$: A Flow Model"), "pi0: A Flow Model"); self.assertEqual(titles.ascii_pi("π₀.₆ learns"), "pi0.6 learns")
+        self.assertEqual(titles.ascii_pi("Learning π-shaped grasps with 2π rotations"), "Learning π-shaped grasps with 2π rotations")
+        self.assertEqual(titles.norm_title("[2025-0422] [arXiv] π0.5: a Model"), titles.norm_title("pi0.5: a Model"))   # the same paper for the duplicate check
+        self.assertEqual(titles.short_title("[2025-0422] [arXiv] pi0.5: a Model"), "pi0.5")
+
 
 if __name__ == "__main__": unittest.main()
