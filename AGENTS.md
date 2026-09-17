@@ -85,7 +85,10 @@ as known (`[2008-11]`, `[1987]`). Venue = abbreviation from `taxonomy.toml`; `[a
 URL = project page if one exists, else the arXiv / DOI link; the arXiv id stays in the DOI field; Short Title = nickname >
 part before the colon > title. Physical Intelligence's models are written in ASCII in titles and short titles (`pi0`, `pi0.5`,
 never the Greek π — it is not searchable; `titles.ascii_pi`). PDF file names carry no prefix (Zotero rename template;
-`tools/fix_pdf_names.js` repairs old ones).
+`tools/fix_pdf_names.js` repairs old ones). A paper indexed nowhere (project page + camera-ready PDF, no arXiv, no DOI,
+no citation meta) is still added: the local model reads title / authors / abstract / venue statement off the PDF's first
+page (`sources.meta_unindexed`), the date is the PDF file's creation date, and the report flags both — `--name`, `--date`,
+`--venue` override.
 
 ## Workflows
 

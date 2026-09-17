@@ -7,7 +7,7 @@ from .config import INBOX
 from .http import get_text
 from .pdf import download_pdf, pdf_text, pdf_first_page_date, project_urls, project_url_score
 from .published import lookup_published
-from .sources import ARXIV_ID, classify_link, slug_of, meta_arxiv, meta_crossref, meta_openreview, meta_page, ids_from_pdf_text, ids_from_page
+from .sources import ARXIV_ID, classify_link, slug_of, meta_arxiv, meta_crossref, meta_openreview, meta_page, meta_unindexed, ids_from_pdf_text, ids_from_page
 from .titles import ascii_pi, make_title, norm_title, short_title
 
 
@@ -54,15 +54,14 @@ def find_duplicate(m):
 
 def fetch_one(link):
     os.makedirs(INBOX, exist_ok=True)
-    kind, ident = classify_link(link); pdf_hint = None; pre_pdf = None; pdf_from = link
+    kind, ident = classify_link(link); pdf_hint = None; pre_pdf = None; pdf_from = link; page_url = None; first = ""
     if kind in ("pdf", "file"):                                    # get the PDF first, then find the arXiv id / DOI on its first page
         tmp = os.path.join(INBOX, hashlib.sha1(ident.encode()).hexdigest()[:10] + ".pdf")
         if kind == "file": shutil.copy(ident, tmp); ok, why = True, ident
         else: ok, why = download_pdf(ident, tmp)
         if not ok: raise RuntimeError(f"PDF download failed: {why}")
-        kind, ident = ids_from_pdf_text(pdf_text(tmp, tmp[:-4] + ".txt", first_pages=2))
-        if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
-        if not kind: raise RuntimeError(f"no arXiv id or DOI on the PDF's first page, so no metadata (file kept at {tmp}); for DOI-less venues (JMLR etc.) give the paper page instead, which has citation_* meta")
+        first = pdf_text(tmp, first_pages=2); kind, ident = ids_from_pdf_text(first)
+        if not kind: kind = "pdf"                                  # indexed nowhere: meta_unindexed below
         pre_pdf = tmp
     elif kind == "page":
         page_url = ident; kind, ident, pdf_hint = ids_from_page(ident)
@@ -70,10 +69,17 @@ def fetch_one(link):
             tmp = os.path.join(INBOX, hashlib.sha1(ident.encode()).hexdigest()[:10] + ".pdf")
             ok, why = download_pdf(ident, tmp)
             if not ok: raise RuntimeError(f"the PDF linked from the page failed to download: {why}")
-            pdf_from = ident; kind, ident = ids_from_pdf_text(pdf_text(tmp, tmp[:-4] + ".txt", first_pages=2))
-            if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
+            pdf_from = ident; first = pdf_text(tmp, first_pages=2); kind, ident = ids_from_pdf_text(first)
             pre_pdf = tmp
         if not kind: kind, ident = "page", page_url                     # neither page nor PDF has an arXiv id / DOI: rely on the page's citation_* meta (JMLR etc.), keep the PDF
+    if kind == "page":
+        try: m = meta_page(ident)
+        except RuntimeError:                                           # no citation_* meta either: the paper is indexed nowhere
+            if not pre_pdf: raise
+            kind = "pdf"
+    if kind == "pdf":                                                  # neither arXiv nor DOI nor citation meta: metadata off the PDF's first page (meta_unindexed)
+        if not pre_pdf: raise RuntimeError("no arXiv id or DOI on the PDF's first page and no metadata to build from")
+        m = meta_unindexed(pre_pdf, first, link, url=page_url, page=get_text(page_url) if page_url else None); ident = m["id"]
     if kind == "openreview":                                       # the API is often behind a bot check -> fall back to the PDF route
         try: m = meta_openreview(ident)
         except Exception as e:
@@ -83,7 +89,7 @@ def fetch_one(link):
             if os.path.exists(tmp[:-4] + ".txt"): os.remove(tmp[:-4] + ".txt")
             if not kind: raise RuntimeError(f"OpenReview API refused and the PDF's first page has no arXiv id / DOI (file kept at {tmp}); try the arXiv link")
             pre_pdf, ident = tmp, ident2
-    if kind != "openreview": m = {"arxiv": meta_arxiv, "doi": meta_crossref, "page": meta_page}[kind](ident)
+    if kind in ("arxiv", "doi"): m = {"arxiv": meta_arxiv, "doi": meta_crossref}[kind](ident)
     m["link"] = link; m["slug"] = slug_of(kind, ident)
     pdf = os.path.join(INBOX, m["slug"] + ".pdf"); txt = os.path.join(INBOX, m["slug"] + ".txt")
     if pre_pdf: shutil.move(pre_pdf, pdf); m["pdf_src"] = pdf_from
@@ -112,6 +118,7 @@ def fetch_one(link):
     if m["source"] == "arxiv": lookup_published(m, text if os.path.exists(pdf) else None)   # preprint: look for the published venue
     m["project_urls"] = project_urls(m, text if os.path.exists(pdf) else None, pdf=pdf if os.path.exists(pdf) else None)
     m["project_url"] = next((u for u in m["project_urls"] if project_url_score(u, text if os.path.exists(pdf) else None)), None)   # only project-page-like candidates become the URL field automatically
+    if kind == "pdf" and page_url: m["project_url"] = page_url                    # the page the user gave is the project page
     m["title"] = ascii_pi(m["title"])                                             # every source (Crossref, OpenReview, a page), not only the ones that go through clean_title
     m["proposed_title"] = make_title(m)
     m["short_title"] = short_title(m["title"])
@@ -134,4 +141,5 @@ def card(m):
     if os.path.exists(os.path.join(INBOX, m["slug"] + ".txt")): print(f"  full text : inbox/{m['slug']}.txt")
     else: print("  full text : none (abstract only" + ("; the PDF is there but no pdftotext / pypdf to read it" if m.get("pdf_src") else "") + ")")
     if m.get("duplicate"): print(f"  ! duplicate: already in the library as {m['duplicate']['key']} | {m['duplicate']['title']}")
+    if m.get("meta_src"): print(f"  ! metadata : {m['meta_src']} (not indexed on arXiv / Crossref) — check title and authors; --name / --date / --venue override")
     print(f"  abstract  : {m['abstract'][:1500]}\n")

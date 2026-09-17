@@ -9,7 +9,9 @@ The judgement is done by the scripts (`taxonomy.toml` rules + the local model, o
 command, relay its report, and handle only what it marks. Never read the PDF or grep the full text yourself.
 
 Arguments: one or more links or local PDF paths, space-separated (arXiv / DOI / OpenReview / PDF / project page / a
-paper page with citation meta such as JMLR). A file with one link per line (a reading list, a bibliography): `--from-file FILE`
+paper page with citation meta such as JMLR / a publisher page with the DOI in its path). A paper indexed nowhere yet (a
+project page with a camera-ready PDF, no arXiv, no DOI) is still added: the local model reads title, authors, abstract and
+the venue statement off the PDF's first page, the date is the PDF file's creation date — the report flags all of it. A file with one link per line (a reading list, a bibliography): `--from-file FILE`
 instead of the links. Ask which papers if none were given. On Windows use `python` instead of `python3`.
 
 ## Steps
@@ -40,6 +42,9 @@ instead of the links. Ask which papers if none were given. On Windows use `pytho
    - **duplicate**: skipped by default; say which item already exists. `--force` only if the user insists.
    - **x** (error): the link was not recognized or metadata failed; tell the user why and ask for an arXiv/DOI link,
      the paper page, or the PDF.
+   - **metadata from the pdf first page** (not indexed anywhere): relay the title and authors for the user to check and
+     say the date is the file's creation date; `python3 zl.py set <key> title=...` fixes what the user corrects. Don't
+     search the web for the paper — the script already tried arXiv by title.
    - **venue still `arXiv <- default`**: the script already checked the arXiv comment, PDF first page, Semantic Scholar,
      Crossref and the project page — don't search again; note "no acceptance found". If the user asks, search the web
      and fix with `python3 zl.py set <key> title="[date] [Venue] Title"`.

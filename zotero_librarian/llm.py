@@ -57,16 +57,17 @@ def available(cfg=None):
         return False, f"{'Ollama' if cfg['kind'] == 'ollama' else 'the model server'} is not running at {cfg['url']}"
 
 
-def _chat(cfg, system, user):
+def _chat(cfg, system, user, schema=None):
+    schema = schema or SCHEMA
     if cfg["kind"] == "ollama":
-        body = {"model": cfg["model"], "stream": False, "think": False, "format": SCHEMA,
+        body = {"model": cfg["model"], "stream": False, "think": False, "format": schema,
                 "options": {"temperature": 0, "num_ctx": 16384},
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
         r = urllib.request.urlopen(urllib.request.Request(cfg["url"] + "/api/chat", data=json.dumps(body).encode(),
                                                           headers={"Content-Type": "application/json"}), timeout=cfg["timeout"])
         return json.loads(r.read())["message"]["content"]
     body = {"model": cfg["model"], "temperature": 0, "response_format": {"type": "json_object"},
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user + "\nReturn a JSON object with keys collection, also, tags, uncertain, confidence, reason."}]}
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user + "\nReturn a JSON object with keys " + ", ".join(schema["properties"]) + "."}]}
     hdr = {"Content-Type": "application/json"}
     if cfg["key"]: hdr["Authorization"] = "Bearer " + cfg["key"]
     r = urllib.request.urlopen(urllib.request.Request(cfg["url"] + "/v1/chat/completions", data=json.dumps(body).encode(), headers=hdr), timeout=cfg["timeout"])
@@ -87,6 +88,31 @@ def build_prompt(title, abstract, sg, body):
     parts.append("\nDecide: collection (exactly one name from the list; use `also` only for a survey that belongs in two), tags (family:value strings), "
                  "uncertain (tags you considered but could not confirm, each as 'tag: reason'), confidence 0-1 for the collection, reason (one sentence).")
     return "\n".join(parts)
+
+
+BIB_SCHEMA = {"type": "object", "required": ["title", "authors", "abstract", "venue", "year"],
+              "properties": {"title": {"type": "string"}, "authors": {"type": "array", "items": {"type": "string"}},
+                             "abstract": {"type": "string"}, "venue": {"type": "string"}, "year": {"type": "string"}}}
+BIB_SYSTEM = ("You extract bibliographic fields from the first page of a research paper (and, if given, the text of its project page). "
+              "title: the paper's full title exactly as printed. authors: every author in order as 'First Last', without affiliations, "
+              "superscripts or marks. abstract: the abstract verbatim. venue: the publication statement as printed (for example "
+              "'Conference on Robot Learning (CoRL) 2026', 'Accepted to ICRA 2027'), or '' if the page states none. year: the four-digit "
+              "year of that statement, or '' if none. Never invent a field. Reply with JSON only.")
+
+
+def bib_fields(first_page, page_text="", cfg=None):
+    """Title / authors / abstract / venue statement / year read off a PDF's first page by the local model — for a paper that is
+    on neither arXiv nor Crossref (a project page with a camera-ready PDF). (fields, model name) or (None, reason) when no model."""
+    cfg = cfg or settings(); ok, why = available(cfg)
+    if not ok: return None, why
+    user = "PDF first page:\n" + first_page[:6000] + ("\n\nProject page text:\n" + page_text[:2000] if page_text else "")
+    raw = _chat(cfg, BIB_SYSTEM, user, schema=BIB_SCHEMA)
+    try: out = json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.S); out = json.loads(m.group(0)) if m else {}
+    for k in ("title", "abstract", "venue", "year"): out[k] = str(out.get(k) or "").strip()
+    out["authors"] = [str(a).strip() for a in out.get("authors") or [] if str(a).strip()]
+    return out, cfg["model"]
 
 
 def ask(title, abstract, body, sg, cfg=None):

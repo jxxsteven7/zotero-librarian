@@ -43,6 +43,7 @@ def brief(m, sg=None):
     print(f"  URL       : {m.get('project_url') or (m.get('url') or '-') + ' (no project page found)'}")
     print(f"  PDF       : {'ok <- ' + m['pdf_src'] if m.get('pdf_src') else 'not obtained ' + '; '.join(m.get('pdf_tried', []))[:200]}")
     if m.get("duplicate"): print(f"  ! duplicate: already in the library as {m['duplicate']['key']} | {m['duplicate']['title']}")
+    if m.get("meta_src"): print(f"  ! metadata : {m['meta_src']} (not indexed on arXiv / Crossref) — check title and authors; --name / --date / --venue override")
     print(f"  abstract  : {m.get('abstract', '')[:300]}...", flush=True)
     if sg is not None: judgement(sg)
 
@@ -114,6 +115,7 @@ def report_row(got, sg, info, note_extra=""):
     notes = []
     if sg["maybe"]: notes.append("candidates: " + ", ".join(sg["maybe"]))                # reasons are in the judgement above
     notes += [f for f in sg["flags"] if "status tag only" not in f]
+    if got.get("meta_src"): notes.append(f"metadata from the {got['meta_src']} — check title / authors")
     if "!" in (got.get("date_src") or "") or "!" in (got.get("venue_src") or ""): notes.append(f"date/venue flagged: {got.get('date_src')} / {got.get('venue_src')}")
     if note_extra: notes.append(note_extra)
     sync = "ok" if info else "unconfirmed"
@@ -124,7 +126,7 @@ def report_row(got, sg, info, note_extra=""):
 def finish(slug, m, sg, coll, also, tags, venue=None, date_=None, name=None, url=None, short=None, force=False, wait=150):
     """Save + verify + report row. Shared by add and save (the connector already appended the audit log)."""
     got = connector.save(slug, coll, tags, also=also, venue=venue, date_=date_, name=name, force=force, url=url, short=short)
-    got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"))
+    got.update(date_src=m.get("date_src"), venue_src=m.get("venue_src"), meta_src=m.get("meta_src"))
     info = None
     if wait:
         try: info = verify(got["key"], wait=wait, expect=dict(collection=coll, tags=tags, url=got["url"], short=got["short"]))

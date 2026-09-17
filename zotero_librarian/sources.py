@@ -1,11 +1,13 @@
 """Link recognition and metadata sources: arXiv (API, abs page when rate-limited), Crossref (DOI), OpenReview,
-and paper pages carrying citation_* meta tags. Every meta_* returns the same dict shape:
+paper pages carrying citation_* meta tags, and — for a paper that is indexed nowhere — the PDF's first page.
+Every meta_* returns the same dict shape:
 source / id / url / title / authors / abstract / date / date_src / venue / venue_src / item (the connector saveItems payload)."""
 import hashlib, html, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 
 from .http import get_text
-from .venues import abbr_from_name, venue_from_context
+from .pdf import pdf_creation_date
+from .venues import abbr_from_name, venue_from_context, venue_from_pdf
 from .titles import clean_title, norm_title, ws
 
 
@@ -20,6 +22,8 @@ def classify_link(link):
     m = re.search(r"openreview\.net/(?:forum|pdf|attachment)\?id=([\w\-]+)", s)
     if m: return "openreview", m.group(1)
     m = re.search(r"doi\.org/(10\.\d{4,9}/\S+)", s) or re.fullmatch(r"(?:doi:)?(10\.\d{4,9}/\S+)", s, re.I)
+    if m: return "doi", m.group(1).rstrip(".,;)")
+    m = re.search(r"/doi/(?:abs/|full/|pdf/|epdf/)?(10\.\d{4,9}/[^\s?#]+)", s)          # publisher pages carry the DOI in the path: science.org/doi/10.1126/..., dl.acm.org/doi/10.1145/...
     if m: return "doi", m.group(1).rstrip(".,;)")
     if re.search(r"\.pdf(?:$|[?#])", s, re.I): return "pdf", s
     return "page", s
@@ -176,6 +180,45 @@ def meta_page(url):
     else: item["proceedingsTitle"] = conf; item["conferenceName"] = conf
     m["item"] = {k: v for k, v in item.items() if v}
     return m
+
+def page_text(page):
+    """Visible text of an HTML page (scripts, styles and tags stripped)."""
+    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", page or "", flags=re.S | re.I)
+    return ws(html.unescape(re.sub(r"<[^>]+>", " ", t)))
+
+
+def meta_unindexed(pdf, first_page, link, url=None, page=None):
+    """A paper that is on neither arXiv nor Crossref and has no citation_* meta (a project page with a camera-ready PDF, or a
+    bare PDF): title, authors, abstract and the publication statement are read off the PDF's first page by the local model
+    (`llm.bib_fields`); without a model, the title is the first line and the authors are left for the user. The date is the
+    PDF file's creation date (there is no other), the venue what the first page states — both flagged, `--date` / `--venue`
+    override. `url` (the project page) becomes the URL field; its text helps the model."""
+    from . import llm
+    ptext = page_text(page) if page else ""
+    bib, model = llm.bib_fields(first_page, ptext)
+    if bib and bib["title"]:
+        title, authors, abstract = bib["title"], [split_name(a) for a in bib["authors"]], bib["abstract"]
+        stated, year, meta_src = bib["venue"], bib["year"], f"pdf first page, read by {model}"
+    else:                                                                    # no model: the first line is the title, the authors are the user's job
+        lines = [l.strip() for l in first_page.splitlines() if len(l.strip()) > 15]
+        if not lines: raise RuntimeError("the PDF's first page has no arXiv id / DOI and yields no text: nothing to build metadata from")
+        title, authors = lines[0], []
+        g = re.search(r"\babstract\b[\s.:—-]*(.+?)(?=\n\s*(?:keywords?|index terms|1\.?\s+introduction|I\.\s+INTRODUCTION)\b)", first_page, re.S | re.I)
+        abstract = ws(g.group(1)) if g else ""
+        stated, year, meta_src = "", "", "pdf first page, no model (" + (model or "") + ") — check the title, add the authors"
+    v = abbr_from_name(stated) or venue_from_pdf(first_page)[0] or venue_from_context(ptext) or venue_from_context(stated)
+    venue, venue_src = (v, "pdf first page") if v else ("????", "not indexed anywhere and no statement on the first page !")
+    yr = re.search(r"\b(20\d\d)\b", year or stated or ""); yr = yr.group(1) if yr else ""
+    made = pdf_creation_date(pdf)
+    date, date_src = (made, "pdf:file creation date, not the day it appeared !") if made else (yr, "year of the venue statement only !" if yr else "unknown !")
+    m = dict(source="pdf", id=url or link, url=url or link, title=ws(clean_title(title)), authors=authors, abstract=ws(abstract), pub_year=yr,
+             date=date, date_src=date_src, stated_venue=stated, meta_src=meta_src, venue=venue, venue_src=venue_src)
+    item = dict(itemType="conferencePaper" if v else "preprint", title=m["title"], creators=authors, abstractNote=m["abstract"],
+                date=date, url=url or "", accessDate="CURRENT_TIMESTAMP")
+    if v: item["conferenceName"] = item["proceedingsTitle"] = stated or v
+    m["item"] = {k: x for k, x in item.items() if x}
+    return m
+
 
 def meta_openreview(oid):
     r = json.loads(get_text(f"https://api2.openreview.net/notes?id={oid}"))

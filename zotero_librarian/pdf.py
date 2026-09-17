@@ -59,6 +59,18 @@ def pdf_first_page_date(text, pub_year):
         if 1 <= mon <= 12 and not (pub_year and abs(y - int(pub_year)) > 1): return f"{y}-{mon:02d}", "pdf:published(month only)"
     return None
 
+def pdf_creation_date(pdf):
+    """The day the PDF file was produced (Info dictionary or XMP), YYYY-MM-DD or None. The only date a camera-ready PDF that is
+    on neither arXiv nor Crossref carries — a stand-in for the day the paper appeared, flagged as such by the caller."""
+    try:
+        with open(pdf, "rb") as f: raw = f.read()
+    except OSError: return None
+    m = re.search(rb"/CreationDate\s*\(D:(\d{4})(\d{2})(\d{2})", raw) or re.search(rb"<xmp:CreateDate>(\d{4})-(\d{2})-(\d{2})", raw)
+    if not m: return None
+    y, mo, d = (int(x) for x in m.groups())
+    return f"{y}-{mo:02d}-{d:02d}" if 1990 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31 else None
+
+
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+|(?<![\w/.])[\w.-]+\.github\.io(?:/[^\s<>\"')\]]*)?")   # also bare xxx.github.io as printed in PDFs
 
 NOT_PROJECT_HOSTS = ("arxiv.org", "doi.org", "openreview.net", "semanticscholar.org", "youtube.com", "youtu.be", "creativecommons.org",
