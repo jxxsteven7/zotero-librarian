@@ -13,8 +13,8 @@ from datetime import date
 from . import classify, connector, fetch, llm, localdb, table, taxonomy as tx, zapi
 from .config import DATA_DIR, INBOX
 from .pdf import pdf_text, project_urls, project_url_score
-from .published import lookup_published
-from .sources import ARXIV_ID, meta_arxiv, meta_crossref, meta_page
+from .published import doi_by_title, lookup_published
+from .sources import ARXIV_ID, ids_from_pdf_text, meta_arxiv, meta_crossref, meta_page
 from .titles import fmt_date, merge_prefix, short_title, split_prefix
 
 COLS = ["key", "title", "collection", "tags", "PDF", "notes"]
@@ -205,22 +205,32 @@ def plan_item(r, confirm=None):
     """Everything tidy would write for one item: metadata fixes, title, url, short title, tags, collection."""
     text = pdf_text(os.path.join(DATA_DIR, r["pdfs"][0])) if r.get("pdfs") and os.path.exists(os.path.join(DATA_DIR, r["pdfs"][0])) else ""
     fields = {}; notes = []
-    m = None; aid = _arxiv_id_of(r, text)
+    m = None; aid = _arxiv_id_of(r, text); doi = r.get("doi")
+    if not aid and not doi and text:                                   # a PDF dropped in by hand: the arXiv id / DOI printed on its first page
+        kind, ident = ids_from_pdf_text(text)
+        if kind == "arxiv": aid = ident
+        elif kind == "doi": doi = ident
+    old_date, old_venue, title = split_prefix(r["title"]); abstract = r.get("abstract", "")
     if aid:
         try: m = meta_arxiv(aid)
         except Exception as e: notes.append(f"arXiv metadata failed ({e})")
-    elif r.get("doi"):
-        try: m = meta_crossref(r["doi"])
+    elif doi:
+        try: m = meta_crossref(doi)
         except Exception as e: notes.append(f"Crossref metadata failed ({e})")
     elif r.get("url") and "arxiv.org" not in r["url"]:
         try: m = meta_page(r["url"])
         except Exception as e: notes.append(f"page metadata failed ({e})")
-    old_date, old_venue, title = split_prefix(r["title"]); abstract = r.get("abstract", "")
+    if not m and not aid and len(title) > 15:                          # no id anywhere: Crossref may know the title (a journal PDF whose first page carries no DOI)
+        doi, _ = doi_by_title(title)
+        if doi:
+            try: m = meta_crossref(doi); notes.append(f"DOI found on Crossref by title: {doi}")
+            except Exception as e: notes.append(f"Crossref metadata failed ({e})")
     if m:
         if not title or len(title) < 8 or title.lower().endswith(".pdf"): title = m["title"]
         if not abstract: abstract = m["abstract"]; fields["abstractNote"] = abstract
         if not r.get("authors"): fields["creators"] = m["authors"]
         if m["source"] == "arxiv" and not r.get("doi"): fields["DOI"] = m["item"]["DOI"]
+        if m["source"] == "crossref" and not r.get("doi"): fields["DOI"] = m["id"]
         if m["source"] == "arxiv": lookup_published(m, text or None)
         date_ = fmt_date(m["date"]); venue = m.get("venue") or "????"; src = f"{m['date_src']} / {m['venue_src']}"
     else:

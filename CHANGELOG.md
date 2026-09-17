@@ -2,6 +2,7 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v1.4** (2026-09-17) — `tidy`: a PDF dropped in by hand with no id in the item gets its arXiv id / DOI from the first page, else its DOI from Crossref by title (`published.doi_by_title`), so date, venue, abstract and the DOI field are filled. `--help` / `-h` after any command prints the usage instead of running it.
 - **v1.3** (2026-09-17) — A paper indexed nowhere (project page + camera-ready PDF, no arXiv, no DOI, no citation meta) is added anyway: the local model reads title / authors / abstract / venue statement off the PDF's first page (`sources.meta_unindexed`, `llm.bib_fields`), the date is the PDF file's creation date, both flagged in the report. Publisher pages with the DOI in the path (science.org, dl.acm.org, Wiley) are recognized.
 - **v1.2** (2026-09-16) — Physical Intelligence's model names are written in ASCII in titles and short titles (`pi0`, `pi0.5`,
   never the Greek π: not searchable); `titles.ascii_pi`, applied to every source and to the duplicate check.

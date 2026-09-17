@@ -4,7 +4,7 @@ against how the tool itself stores an arXiv id."""
 import os, tempfile, unittest
 from unittest import mock
 
-from zotero_librarian import fetch, pdf, sources
+from zotero_librarian import fetch, pdf, published, sources
 
 ATOM = '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">{}</feed>'
 ERROR = ATOM.format('<entry><id>http://arxiv.org/api/errors#incorrect_id_format_for_2112.05251x</id><title>Error</title><summary>incorrect id format</summary></entry>')
@@ -90,6 +90,21 @@ class Unindexed(unittest.TestCase):
         with mock.patch("zotero_librarian.llm.bib_fields", return_value=(no_venue, "qwen-test")):
             m = sources.meta_unindexed(self.tmp.name, "A title\nAn author\nAbstract: text.\n1 Introduction", "/tmp/x.pdf")
         self.assertEqual((m["venue"], m["item"]["itemType"]), ("????", "preprint")); self.assertIn("!", m["venue_src"])
+
+
+CROSSREF = '{"message": {"items": [{"DOI": "10.48550/arXiv.2609.00001", "title": ["How robot dogs see the unseeable"]}, ' \
+           '{"DOI": "10.1126/scirobotics.aed8577", "title": ["How Robot Dogs See the Unseeable"], "container-title": ["Science Robotics"]}, ' \
+           '{"DOI": "10.1000/other", "title": ["How robot dogs see"], "container-title": ["Nowhere"]}]}}'
+
+
+class CrossrefByTitle(unittest.TestCase):
+    def test_exact_title_match_skipping_arxiv_dois(self):
+        with mock.patch.object(published, "get_text", return_value=CROSSREF):
+            self.assertEqual(published.doi_by_title("How robot dogs see the unseeable"), ("10.1126/scirobotics.aed8577", "Science Robotics"))
+            self.assertEqual(published.crossref_by_title("How robot dogs see the unseeable"), ("SR", "Crossref: Science Robotics doi:10.1126/scirobotics.aed8577"))
+            self.assertEqual(published.doi_by_title("A title Crossref does not have"), (None, None))
+        with mock.patch.object(published, "get_text", side_effect=OSError("offline")):
+            self.assertEqual(published.doi_by_title("How robot dogs see the unseeable"), (None, None))
 
 
 class Duplicates(unittest.TestCase):

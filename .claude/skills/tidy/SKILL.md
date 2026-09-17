@@ -7,7 +7,7 @@ description: Organize items the user dropped into Zotero by hand (no status tag 
 
 For papers the user added directly in Zotero (dragged a PDF in, used the browser connector...). Those items have no
 `status:` tag yet; `zl.py tidy` finds them and does what `download` does, through the Web API: fills missing metadata
-(arXiv / Crossref / page meta), formats the title, sets the URL (project page) and Short Title, classifies, files them
+(arXiv / Crossref / page meta; a PDF without any id: its first page, then Crossref by title), formats the title, sets the URL (project page) and Short Title, classifies, files them
 into a collection, logs and commits.
 
 On a library nobody has organized with this tool yet, that is every item — the first run is the whole library

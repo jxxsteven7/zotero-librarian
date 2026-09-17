@@ -23,6 +23,11 @@ class Cli(unittest.TestCase):
     def test_help_lists_every_skill_command(self):
         out = self.run_zl("--help").stdout
         for cmd in ("add", "tidy", "discover", "refs", "setup", "install"): self.assertIn(f"\n  {cmd} ", out, cmd)
+    def test_help_after_a_command_shows_the_usage_instead_of_running_it(self):
+        """`zl.py tidy --help` once ran a real tidy (2026-09-17): --help / -h anywhere prints the usage and touches nothing."""
+        for args in (("tidy", "--help"), ("add", "-h"), ("recheck", "--write", "--help")):
+            r = self.run_zl(*args); self.assertEqual(r.returncode, 0, args); self.assertIn("\n  tidy ", r.stdout, args); self.assertNotIn("to tidy", r.stdout, args)
+
     def test_setup_offline_passes(self):
         r = self.run_zl("setup", "--offline"); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 

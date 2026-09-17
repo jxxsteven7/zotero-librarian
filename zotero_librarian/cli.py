@@ -70,7 +70,7 @@ def _opt(args, name, default=None, cast=str):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    if not argv or argv[0] in ("-h", "--help", "help"): print(USAGE); return
+    if not argv or argv[0] in ("-h", "--help", "help") or "-h" in argv or "--help" in argv: print(USAGE); return   # `zl.py tidy --help` shows the usage, it does not tidy
     if argv[0] in ("--version", "-V", "version"): print(f"{NAME} {__version__}"); return
     try: run(argv[0], argv[1:])
     except IndexError: sys.exit(f"zl.py {argv[0]}: missing argument — see `python3 zl.py --help`")

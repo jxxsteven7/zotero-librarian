@@ -34,8 +34,8 @@ def s2_venues(arxiv_ids):
                 out[a] = (abbr_from_name(name), f"S2: {name}" + (f" doi:{doi}" if real_doi else ""))
     return out
 
-def crossref_by_title(title):
-    """Crossref title search for a published version (only venues that mint DOIs, e.g. IEEE): (abbr or None, evidence) or (None, None)."""
+def doi_by_title(title):
+    """Crossref title search: (DOI, container name) of the record whose title matches exactly — arXiv's own DOIs skipped — or (None, None)."""
     try:
         q = urllib.parse.quote(re.sub(r"[^\w\s-]", " ", title)[:200])
         js = json.loads(get_text(f"https://api.crossref.org/works?query.bibliographic={q}&rows=3&select=DOI,title,container-title,event,type", ua=UA_LOCAL))
@@ -43,9 +43,14 @@ def crossref_by_title(title):
     for it in js.get("message", {}).get("items", []):
         if it.get("DOI", "").lower().startswith("10.48550/"): continue
         if norm_title((it.get("title") or [""])[0]) != norm_title(title): continue
-        name = (it.get("container-title") or [""])[0] or (it.get("event") or {}).get("name", "")
-        return abbr_from_name(name), f"Crossref: {name} doi:{it['DOI']}"
+        return it["DOI"], (it.get("container-title") or [""])[0] or (it.get("event") or {}).get("name", "")
     return None, None
+
+
+def crossref_by_title(title):
+    """Crossref title search for a published version (only venues that mint DOIs, e.g. IEEE): (abbr or None, evidence) or (None, None)."""
+    doi, name = doi_by_title(title)
+    return (abbr_from_name(name), f"Crossref: {name} doi:{doi}") if doi else (None, None)
 
 def venue_from_page(url):
     """Fetch a project page / README and look for "Accepted to CoRL 2026"-style statements -> (abbr, evidence); (None, note) when it says under review / anonymous."""
