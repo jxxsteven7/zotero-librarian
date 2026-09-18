@@ -121,6 +121,20 @@ head_requires = "\\b(we|our)\\b[^.]{0,60}\\b(propose|present|introduce|develop|b
 title_requires = "teleoperat"
 title_maybe = "retarget"                # retargeting in the title: could be teleop, could be pure simulation retargeting — ask
 
+[families.method.values."human-video"]
+description = "Human videos (egocentric, third-person or internet footage) are the paper's own source of demonstrations or kinematic references: hand / body poses are reconstructed from the video and retargeted to a dex-hand or humanoid for imitation, RL tracking or pretraining. Teleoperation, mocap-only data and video-prediction world models are not this."
+patterns = ["human (hand |demonstration |manipulation |motion |activity )?videos?|videos? of (a )?humans?|egocentric videos?|hand-object interaction videos?"]
+weak = ["hand pose estimation|human pose estimation|(3D )?hand reconstruction|\\bMANO\\b|\\bSMPL(-X)?\\b|\\bHaMeR\\b|\\bEgo4D\\b|\\bEgoDex\\b|\\bEPIC-KITCHENS\\b|\\bEpic-Kitchens\\b|\\bHOI4D\\b|\\bDexYCB\\b|in-the-wild videos?|internet videos?|from (monocular |RGB )?videos?"]
+sure = 999                              # body mentions alone never assign it: a paper that cites the human-video literature is not one
+maybe = 3
+
+[families.method.values.mocap]
+description = "Human motion-capture recordings (AMASS, optical or IMU mocap datasets) are the paper's own source of demonstrations or kinematic references, retargeted offline to a dex-hand or humanoid for imitation or RL tracking. A mocap suit driving the robot live is method:teleop; poses lifted from video are method:human-video."
+patterns = ["motion[- ]capture (data|datasets?|recordings?|clips?|sequences?|trajectories)|\\bmocap (data|datasets?|recordings?|clips?|sequences?|trajectories)|\\bAMASS\\b|\\bLAFAN1?\\b|\\bCMU MoCap\\b"]
+weak = ["motion[- ]capture|\\bmocap\\b|\\bSMPL(-X)?\\b|human motion (data|datasets?)"]
+sure = 999
+maybe = 3
+
 [families.method.values."grasp-synthesis"]
 description = "Grasp pose synthesis / generation."
 patterns = ["grasp (synthesis|generation)|dexterous grasp(ing|s)?\\b"]

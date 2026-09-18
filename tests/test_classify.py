@@ -79,6 +79,22 @@ class Rules(unittest.TestCase):
         sg = classify.suggest("HumanoidRL: Whole-Body Control for Humanoid Locomotion", a, a)
         self.assertEqual(sg["collection"], "Humanoid"); self.assertEqual(sg["sure"], ["method:rl", "embod:humanoid"])
 
+    def test_human_video_and_mocap_are_the_papers_own_data_source(self):
+        """method:human-video / method:mocap (v1.5): the abstract says the references come from video / mocap -> assigned;
+        a body that only cites the human-video literature -> candidate."""
+        a = ("We learn dexterous in-hand reorientation on a LEAP hand from egocentric human videos: hand poses are reconstructed "
+             "with HaMeR and retargeted to the robot, then refined with reinforcement learning in simulation.")
+        sg = classify.suggest("VideoDex", a, a + "\n\nExperiments. We reconstruct MANO hand poses from Ego4D clips.\n\nReferences\n[1] x.")
+        self.assertEqual(sg["collection"], "Dex-Manipulation"); self.assertIn("method:human-video", sg["sure"]); self.assertIn("method:rl", sg["sure"])
+        a = "We train a humanoid motion tracking policy on a Unitree G1 from AMASS motion capture data retargeted to the robot, using reinforcement learning."
+        sg = classify.suggest("TrackG1", a, a)
+        self.assertEqual(sg["collection"], "Humanoid"); self.assertEqual(sg["sure"], ["method:rl", "method:mocap", "embod:humanoid"])
+        a = "We present a reinforcement learning controller for whole-body humanoid loco-manipulation on a Unitree G1 with a learned reward."
+        body = a + ("\n\nRelated work. Several works learn from human videos [3,4]; human videos are also used for pretraining [5]. "
+                    "Human videos remain noisy, and human-to-robot transfer is hard.\n\nExperiments. Unitree G1 humanoid robot.\n\nReferences\n[1] x.")
+        sg = classify.suggest("G1Loco", a, body)
+        self.assertNotIn("method:human-video", sg["sure"]); self.assertIn("method:human-video", sg["maybe"])
+
     def test_status_only_collection(self):
         a = ("We propose a differential evolution variant with an adaptive mutation strategy. Benchmarks on CEC 2017 functions show "
              "that the evolutionary algorithm outperforms particle swarm optimization.")
