@@ -113,6 +113,14 @@ class Rules(unittest.TestCase):
         self.assertEqual((sg["collection"], sg["also"]), ("Dex-Manipulation", tx.SURVEY_HOME))
         self.assertEqual(sg["sure"], ["type:survey", "method:vla"])
 
+    def test_curation_is_a_type_beside_the_method(self):
+        a = ("Vision-language-action models are post-trained on newly collected demonstrations. We present a data curation framework "
+             "that ranks post-training samples by local gradient compatibility and drops harmful ones.")
+        sg = classify.suggest("RoboCurate: Curating VLA Post-Training Data", a, a)
+        self.assertIn("type:curation", sg["sure"]); self.assertIn("method:vla", sg["sure"])
+        sg = classify.suggest("DexVLA", ABSTRACT, BODY)
+        self.assertNotIn("type:curation", sg["sure"])
+
     def test_analysis_context_survives_the_rule_verdict(self):
         """llm.merge starts from the pre-relation context, so finish_rules() must not mutate what analyze() returned."""
         c = classify.analyze("DexVLA", ABSTRACT, BODY); before = (dict(c["fam_tags"]), dict(c["maybe"]))

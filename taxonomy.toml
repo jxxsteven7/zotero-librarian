@@ -307,6 +307,11 @@ description = "Dataset."
 title = "\\bdatasets?\\b|\\bdatabase\\b"
 introduce = "\\bdatasets?\\b"
 
+[families.type.values.curation]
+description = "Data curation: selecting, filtering, weighting, auditing or mixing training data (pretraining mixtures, post-training data, demonstration quality) is the paper's contribution, not a new policy or model. Merely using a dataset is not; releasing one is type:dataset."
+title = "\\bcurat(e|es|ed|ing|ion)\\b|\\bdata (selection|filtering|pruning|mixtures?|attribution|valuation)\\b"
+introduce = "data[- ]curation|curation (framework|method|pipeline)|data (selection|filtering|pruning) (framework|method)"
+
 [families.status]
 description = "Reading progress (exactly one of the read axis), plus optional presentation and reproduction axes."
 read_axis = ["to-read-first", "to-read", "skimmed", "read"]      # never downgrade without approval

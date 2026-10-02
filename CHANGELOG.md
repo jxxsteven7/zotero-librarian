@@ -2,6 +2,7 @@
 
 One line per version: every commit that changes behaviour is a `vX.Y` (AGENTS.md); major versions are tagged by the maintainer.
 
+- **v1.6** (2026-10-02) — `type:curation`: selecting, filtering, weighting, auditing or mixing training data is the paper's contribution (title, or "we introduce/present ... data curation" in the abstract); orthogonal to `method`.
 - **v1.5** (2026-09-18) — Two `method` values: `human-video` (human videos are the paper's own source of demonstrations or kinematic references, poses reconstructed and retargeted to a dex-hand / humanoid) and `mocap` (the same from motion-capture recordings such as AMASS); body mentions alone only make a candidate.
 - **v1.4** (2026-09-17) — `tidy`: a PDF dropped in by hand with no id in the item gets its arXiv id / DOI from the first page, else its DOI from Crossref by title (`published.doi_by_title`), so date, venue, abstract and the DOI field are filled. `--help` / `-h` after any command prints the usage instead of running it.
 - **v1.3** (2026-09-17) — A paper indexed nowhere (project page + camera-ready PDF, no arXiv, no DOI, no citation meta) is added anyway: the local model reads title / authors / abstract / venue statement off the PDF's first page (`sources.meta_unindexed`, `llm.bib_fields`), the date is the PDF file's creation date, both flagged in the report. Publisher pages with the DOI in the path (science.org, dl.acm.org, Wiley) are recognized.
