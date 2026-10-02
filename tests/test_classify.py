@@ -121,6 +121,13 @@ class Rules(unittest.TestCase):
         sg = classify.suggest("DexVLA", ABSTRACT, BODY)
         self.assertNotIn("type:curation", sg["sure"])
 
+    def test_benchmark_from_benchmarking_title_or_a_long_introduce_sentence(self):
+        a = ("The field lacks a reproducible benchmark. To fill this gap, we present KitchenSim365, a comprehensive simulation "
+             "benchmark for household mobile manipulation. We evaluate vision-language-action models such as pi0.")
+        self.assertIn("type:benchmark", classify.suggest("KitchenSim365", a, a)["sure"])
+        b = "We train and evaluate generalist policies on household tasks."
+        self.assertIn("type:benchmark", classify.suggest("A Framework for Training and Benchmarking Generalist Robots", b, b)["sure"])
+
     def test_analysis_context_survives_the_rule_verdict(self):
         """llm.merge starts from the pre-relation context, so finish_rules() must not mutate what analyze() returned."""
         c = classify.analyze("DexVLA", ABSTRACT, BODY); before = (dict(c["fam_tags"]), dict(c["maybe"]))

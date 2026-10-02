@@ -297,7 +297,7 @@ head_only = ["method"]                             # keep only methods named in 
 
 [families.type.values.benchmark]
 description = "Benchmark / toolkit."
-title = "benchmarks?\\b"
+title = "benchmark(s|ing)?\\b"
 introduce = "benchmarks?\\b"                        # "we introduce/present/release ... benchmark" in the abstract
 strip = ["tech", "base", "modality"]               # the hardware is real, the methods are baselines
 head_only = ["method"]

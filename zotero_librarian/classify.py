@@ -125,7 +125,7 @@ def analyze(title, abstract, text, has_pdf=True):
     types = []
     for tag, r in ((t, r) for t, r in tx.RULES.items() if t.startswith("type:")):
         if (r.get("title") and re.search(r["title"], title, re.I)) or \
-           (r.get("introduce") and re.search(r"\bwe (introduce|present|release)\b[^.]{0,30}\b(" + r["introduce"] + ")", abstract, re.I)):
+           (r.get("introduce") and re.search(r"\bwe (introduce|present|release)\b[^.]{0,50}\b(" + r["introduce"] + ")", abstract, re.I)):
             types.append(tag)
 
     # ---- score every family ----
